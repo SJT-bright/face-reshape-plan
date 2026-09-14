@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' file: https: http: data:; media-src 'self' blob: file: https:; frame-src https://player.bilibili.com https://www.bilibili.com; connect-src 'self' https:;" />
+  <title>面部重塑计划</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="apple-redesign.css" />
+  <link rel="stylesheet" href="image-3d.css" />
+  <link rel="stylesheet" href="rhythm.css" />
+  <link rel="stylesheet" href="achievement-calendar.css" />
+  <link rel="stylesheet" href="strength.css" />
+</head>
+<body>
+  <!--
+    THESIS: 把每日面部护理变成一台安静的光学雕塑工作台，拒绝普通健康应用的卡片仪表盘。
+    OWN-WORLD: 瓷白光场、冷银钛金属、雾蓝玻璃与半透明树脂；每个图标都是同一光源下的可按压小物件。
+    STORY: 用户打开应用，看清今天的状态，立即开始跟练，再自然进入护肤与长期记录。
+    FIRST VIEWPORT: 左侧是半透明单列导航；主区以大幅光雕面部场景承载标题、开练按钮和今日时长。
+    FORM: 光学雕塑工作台，自有方向第 3 位，seed 8cfb7779。
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+  -->
+  <div id="app">
+    <!-- 侧边导航 -->
+    <aside id="sidebar">
+      <div class="brand">
+        <div class="brand-logo" aria-hidden="true"><img src="assets/3d/brand.png" alt="" draggable="false" /></div>
+        <div class="brand-text">
+          <div class="brand-name">面部重塑计划</div>
+          <div class="brand-sub">Face Reshape Plan</div>
+        </div>
+      </div>
+      <nav id="nav">
+        <button class="nav-item active" data-view="today"><span class="nav-ico">🏠</span><span>今日</span></button>
+        <button class="nav-item" data-view="plan"><span class="nav-ico">🗓️</span><span>训练计划</span></button>
+        <button class="nav-item" data-view="strength"><span class="nav-ico">🏋️</span><span>力量训练</span></button>
+        <button class="nav-item" data-view="skincare"><span class="nav-ico">🧴</span><span>护肤</span></button>
+        <button class="nav-item" data-view="nutrition"><span class="nav-ico">🍽️</span><span>饮食与睡眠</span></button>
+        <button class="nav-item" data-view="achievements"><span class="nav-ico">🏆</span><span>成就</span></button>
+      </nav>
+    </aside>
+
+    <!-- 主内容 -->
+    <main id="main">
+      <header id="topbar">
+        <div id="page-title">今日</div>
+        <div class="topbar-right">
+          <div id="today-status-pill" class="pill">加载中…</div>
+        </div>
+      </header>
+      <section id="view-root"><!-- 各视图渲染于此 --></section>
+    </main>
+  </div>
+
+  <!-- 跟练沉浸层（全屏时覆盖 UI） -->
+  <div id="mini-session-bar" class="hidden">
+    <span class="pulse-dot" data-impeccable-ignore="pulsing-dot"></span>
+    <span id="mini-session-label">跟练进行中</span>
+    <span id="mini-session-time">00:00</span>
+    <button id="mini-session-open" class="btn small">回到跟练</button>
+  </div>
+
+  <!-- 通用弹层 -->
+  <div id="modal-mask" class="hidden">
+    <div id="modal-card"></div>
+  </div>
+  <div id="toast-wrap"></div>
+
+  <script src="js/util.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/rhythm-evidence.js"></script>
+  <script src="js/rhythm-engine.js"></script>
+  <script src="js/strength-core.js"></script>
+  <script src="js/skin-engine.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/rhythm.js"></script>
+  <script src="js/bilibili.js"></script>
+  <script src="js/skincare.js"></script>
+  <script src="js/templates.js"></script>
+  <script src="js/achievement-calendar.js"></script>
+  <script src="js/strength.js"></script>
+  <script src="js/views.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

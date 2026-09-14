@@ -1,0 +1,387 @@
+{
+  "version": "1.2.0",
+  "generator": "image_gen.imagegen (built-in)",
+  "assetCount": 38,
+  "assets": [
+    {
+      "name": "brand",
+      "source": "src/assets/3d/originals/brand.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A premium macOS application icon for a personal face-care and exercise app. One thick softly rounded-square icon, pale icy blue porcelain and translucent lilac resin. In the center a sculpted three-dimensional pearly white side-profile face relief facing right with a graceful jawline and neck, a small frosted lavender arc hugging the cheek. Restrained, elegant, gender-neutral sculptural face, not a realistic portrait. Rich visible bevels, tactile volume and convincing glossy material, strong readable silhouette. The icon fills 84 percent of the square canvas, centered, front view with subtly visible right and bottom thickness. No letters, no words, no symbol '面'.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/brand.png",
+      "output": "src/assets/3d/brand.png",
+      "sha256": "8c6add80d5b2179aa2512dc679a95da1ff7f7794d836ac0494893111c8f23090"
+    },
+    {
+      "name": "home",
+      "source": "src/assets/3d/originals/home.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: One freestanding chunky miniature 3D house icon, pearl porcelain walls, translucent periwinkle roof, recessed doorway, soft rounded forms, recognizable home silhouette.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/home.png",
+      "output": "src/assets/3d/home.png",
+      "sha256": "c74d788799674ca31942e7c33ad612b30aec5b8f147af167ade4a6ede33fba8c"
+    },
+    {
+      "name": "calendar",
+      "source": "src/assets/3d/originals/calendar.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: One freestanding chunky miniature 3D calendar icon, pearl porcelain body, two polished silver binding loops, lavender header and raised small blue date blocks. No digits, no words. Recognizable calendar silhouette.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/calendar.png",
+      "output": "src/assets/3d/calendar.png",
+      "sha256": "493392d0d055c40fa63628f6e385d54bd5f58a113aa75e0397d689c52423340a"
+    },
+    {
+      "name": "skincare",
+      "source": "src/assets/3d/originals/skincare.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: One freestanding chunky miniature 3D skincare pump bottle icon, frosted blush-pink glass body, pearl white pump and lavender collar, no label or lettering, subtle translucent liquid. Recognizable cosmetic bottle silhouette.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/skincare.png",
+      "output": "src/assets/3d/skincare.png",
+      "sha256": "2e6d4c67bacdd28690c7be5c937989bb77ace376b6043db8aa364d97f84aede0"
+    },
+    {
+      "name": "trophy",
+      "source": "src/assets/3d/originals/trophy.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A small sculpted trophy cup, brushed champagne-gold metal, two rounded handles, pearly ceramic pedestal, generous bowl, sophisticated warm highlights.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/trophy.png",
+      "output": "src/assets/3d/trophy.png",
+      "sha256": "c111bba3920cb282b88c0f5418247a3bbe81df8b6453bddcd33eb16cbd4b77b1"
+    },
+    {
+      "name": "video",
+      "source": "src/assets/3d/originals/video.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A small glossy lavender video camera with thick pearl-white rounded body, protruding side lens, simple periwinkle play triangle inset on the camera body.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/video.png",
+      "output": "src/assets/3d/video.png",
+      "sha256": "4eafe67162732fdd2922e8e74d30d8e44d8926854250854348a007f45ea87d56"
+    },
+    {
+      "name": "sun",
+      "source": "src/assets/3d/originals/sun.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A small sculpted sunshine symbol, soft amber-glass orb at center with eight thick rounded champagne-gold rays, friendly elegant object without a face.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/sun.png",
+      "output": "src/assets/3d/sun.png",
+      "sha256": "5ebb403de7c56adc8062ddae840c8bb00cf1d019dccce0abbb1cc302417902f6"
+    },
+    {
+      "name": "cloud",
+      "source": "src/assets/3d/originals/cloud.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A small puffy sculpted cloud with pearl-white curved lobes and an icy blue translucent glass lower edge.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/cloud.png",
+      "output": "src/assets/3d/cloud.png",
+      "sha256": "907501665255e7159b380f27475d427bf537db0b1f56a38607b739c6a7d19042"
+    },
+    {
+      "name": "moon",
+      "source": "src/assets/3d/originals/moon.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A thick sculpted crescent moon of translucent lavender crystal with satin pearl edges, simple recognizable crescent, no face, no stars.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/moon.png",
+      "output": "src/assets/3d/moon.png",
+      "sha256": "9300e2a826d4a93d921760b86bb19aebecdb192ad61b932edd91915777589e01"
+    },
+    {
+      "name": "play",
+      "source": "src/assets/3d/originals/play.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A single thick rounded equilateral triangular play symbol pointing right, solid glossy periwinkle resin with frosted lavender bevels, boldly visible side thickness, no surrounding circle.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/play.png",
+      "output": "src/assets/3d/play.png",
+      "sha256": "a346fd5099dae9c2ca1423cef58f9d87e233c885cd62f78971b0c83b6e02147f"
+    },
+    {
+      "name": "add",
+      "source": "src/assets/3d/originals/add.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A single thick rounded plus sign made of icy-blue frosted glass with a polished silver core, equal arms, chunky and highly legible. No enclosing circle.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/add.png",
+      "output": "src/assets/3d/add.png",
+      "sha256": "2ba891e9fa21cd0e4f3dda3f2e03cacbe6d3134ebe9778b332029b3aa7434127"
+    },
+    {
+      "name": "check",
+      "source": "src/assets/3d/originals/check.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A single thick checkmark made of polished jade-green glass with soft rounded edges and pearly mint highlights. Clearly recognizable tick shape.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/check.png",
+      "output": "src/assets/3d/check.png",
+      "sha256": "0b0dd7cad5cfd68940332835a6eb641c9b5edb11f2350432a9d2aaffb45a33b6"
+    },
+    {
+      "name": "film",
+      "source": "src/assets/3d/originals/film.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A miniature chunky filmstrip frame, lavender crystal edges, ivory center and small rounded perforations down both sides. No letters.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/film.png",
+      "output": "src/assets/3d/film.png",
+      "sha256": "cc0abd971546ab4155676a47053f16a5a58d41daeb15b7a26a979d0b53e7663d"
+    },
+    {
+      "name": "folder",
+      "source": "src/assets/3d/originals/folder.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A miniature folder with one offset tab, frosted sky-blue glass outside and pearl inner layers, very simple recognizable folder silhouette.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/folder.png",
+      "output": "src/assets/3d/folder.png",
+      "sha256": "079ab6cebdd324cf9e4d2c67793f05b876752da9bd472f8737bb7983123c4279"
+    },
+    {
+      "name": "edit",
+      "source": "src/assets/3d/originals/edit.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A single chunky short pencil tilted diagonally upwards right, lilac lacquer, brushed silver collar, ivory pencil tip, softly rounded styling, no paper.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/edit.png",
+      "output": "src/assets/3d/edit.png",
+      "sha256": "7689f368941dd6a994fdd01486f205bcb052791da3a86a1b18e234a633bb2d7c"
+    },
+    {
+      "name": "pause",
+      "source": "src/assets/3d/originals/pause.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: Two parallel thick upright bars made of periwinkle translucent resin, each rounded and beveled, simple pause symbol with generous gap.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/pause.png",
+      "output": "src/assets/3d/pause.png",
+      "sha256": "f3a22f5ede14b6821993b582bb76471182c96549016b4e20c8aa02314e546ae9"
+    },
+    {
+      "name": "target",
+      "source": "src/assets/3d/originals/target.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A small upright three-dimensional concentric bullseye disk, alternating lavender resin and pearl-white rings, tiny silver center, no arrow.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/target.png",
+      "output": "src/assets/3d/target.png",
+      "sha256": "7a4b38b13edcd54f761ab0042261d7987e87badb365f09ded8e29a190f0a8420"
+    },
+    {
+      "name": "clock",
+      "source": "src/assets/3d/originals/clock.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A small rounded clock, pearl porcelain circular body with thick frosted blue rim and two raised navy-blue clock hands, no numerals.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/clock.png",
+      "output": "src/assets/3d/clock.png",
+      "sha256": "50761334c4e49285ab2b644afa714fd43faf30c4ad44ee4fc49c9d126795e958"
+    },
+    {
+      "name": "fire",
+      "source": "src/assets/3d/originals/fire.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A single sculpted flame, translucent peach-amber glass outer flame and warmer gold inner flame, smooth flowing rounded geometry, no face.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/fire.png",
+      "output": "src/assets/3d/fire.png",
+      "sha256": "621b5f1a38682d9c01aaaa1ce2acf7498beecbc098fa9d74fde555cd5651bb51"
+    },
+    {
+      "name": "sparkles",
+      "source": "src/assets/3d/originals/sparkles.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: Two chunky four-point sparkle stars, one larger lavender crystal star and one smaller pearl-white star, arranged diagonally, thick dimensional bevels.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/sparkles.png",
+      "output": "src/assets/3d/sparkles.png",
+      "sha256": "5fbf602d3c38264d40d4e924d124211d677e600b113d2534635fd4efd50a15e3"
+    },
+    {
+      "name": "map",
+      "source": "src/assets/3d/originals/map.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A small folded map object in pearl-white ceramic with pale jade and sky-blue panels, a tiny lavender location pin, no words, no roads or text.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/map.png",
+      "output": "src/assets/3d/map.png",
+      "sha256": "10587f7201559bfd11d22a4e7c9a0718ae919287aad5e255480f0b9391d478ca"
+    },
+    {
+      "name": "alarm",
+      "source": "src/assets/3d/originals/alarm.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A small twin-bell alarm clock, pale periwinkle porcelain body with silver bells and ivory clock face, two navy-blue hands, no digits.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/alarm.png",
+      "output": "src/assets/3d/alarm.png",
+      "sha256": "7607353b7afe2038f447a97ede427a07312e90be6b44dc0d96eccd3479d225d4"
+    },
+    {
+      "name": "download",
+      "source": "src/assets/3d/originals/download.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A single chunky downward arrow of sky-blue glass hovering just above a short pearly receiving tray, bold simple download symbol.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/download.png",
+      "output": "src/assets/3d/download.png",
+      "sha256": "cad4abdbe123a8cfe37d21a966cd16746e750bb74bfc98381ffeb99334391987"
+    },
+    {
+      "name": "basket",
+      "source": "src/assets/3d/originals/basket.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A small rounded open basket of frosted blush-pink resin with a chunky ivory handle and softly modeled slots, no contents.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/basket.png",
+      "output": "src/assets/3d/basket.png",
+      "sha256": "dad1d588b54efffcc6d45f5448be49e0afac437699c726093c284d64a72c49d5"
+    },
+    {
+      "name": "search",
+      "source": "src/assets/3d/originals/search.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A miniature magnifying glass with a thick pearl-silver rim, clear icy-blue glass lens and short lavender rounded handle angled down right.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/search.png",
+      "output": "src/assets/3d/search.png",
+      "sha256": "e94bc9085178e1db83338e71f69c96f6cd34f717d95748be78179efc7699a5c1"
+    },
+    {
+      "name": "save",
+      "source": "src/assets/3d/originals/save.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A miniature three-dimensional save disk icon, softly rounded jade-green resin square with a recessed pearl-white label space and silver shutter, no letters.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/save.png",
+      "output": "src/assets/3d/save.png",
+      "sha256": "b913f778fecb0ec1f7a339f5f4d5936abddea65c37fb280f840ef55869c4d4a5"
+    },
+    {
+      "name": "fullscreen",
+      "source": "src/assets/3d/originals/fullscreen.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: Four chunky L-shaped corner brackets arranged symmetrically to make a fullscreen expand symbol, frosted periwinkle glass with polished silver bevels. Empty center.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/fullscreen.png",
+      "output": "src/assets/3d/fullscreen.png",
+      "sha256": "5f482283febd84e3864dee3bd0b59c605c455e53ebd98ece51c0013be58d4879"
+    },
+    {
+      "name": "bolt",
+      "source": "src/assets/3d/originals/bolt.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A single chunky lightning bolt made of translucent champagne-yellow glass with soft edges, unmistakable zigzag silhouette.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/bolt.png",
+      "output": "src/assets/3d/bolt.png",
+      "sha256": "f7f1ad263e81d9682f9e6e62ef6aba2cce58cfd9d10c961fb6e7f2baff81fe28"
+    },
+    {
+      "name": "seed",
+      "source": "src/assets/3d/originals/seed.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A small sculptural sprout with two thick translucent jade-green glass leaves and a pearl-white curved stem, uplifting simple shape, no pot or ground.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/seed.png",
+      "output": "src/assets/3d/seed.png",
+      "sha256": "c266cfa21ce25d44e4553d459018ea838866195ff451fe1bc34af94c688d6212"
+    },
+    {
+      "name": "star",
+      "source": "src/assets/3d/originals/star.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A single plump five-point star sculpted in pale champagne-gold polished metal with very soft rounded edges, no face.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/star.png",
+      "output": "src/assets/3d/star.png",
+      "sha256": "a9d907ba26d7df00e695da8286ac2cb9cbb130351decf25b170189d905ae7346"
+    },
+    {
+      "name": "rocket",
+      "source": "src/assets/3d/originals/rocket.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A miniature elegant chunky rocket pointing up-right, pearl-white ceramic body, lavender fins, small icy-blue porthole and restrained amber exhaust.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/rocket.png",
+      "output": "src/assets/3d/rocket.png",
+      "sha256": "17928c5b1cb4ef27a7decb8046a6e3c0ae69a21f3255a2674ab6c4636da4f145"
+    },
+    {
+      "name": "crown",
+      "source": "src/assets/3d/originals/crown.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A miniature crown with three broad softly rounded points, brushed champagne-gold body with small lavender glass accents, refined simple shape.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/crown.png",
+      "output": "src/assets/3d/crown.png",
+      "sha256": "fdc2334b08bec007897eda82b347b9ae44386c816dacea44640e65edee60dd17"
+    },
+    {
+      "name": "medal",
+      "source": "src/assets/3d/originals/medal.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A miniature round champagne-gold medal with a raised star center and two short lavender ribbons extending upwards. Tactile thick glossy object.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/medal.png",
+      "output": "src/assets/3d/medal.png",
+      "sha256": "fa7272c26f43b8137b9ddb3c32cded121227a9e787542135052d0378112b1b5f"
+    },
+    {
+      "name": "close",
+      "source": "src/assets/3d/originals/close.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A single chunky X symbol made of frosted lavender glass and soft pearl highlights, two intersecting equal rounded bars, clear legible silhouette.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/close.png",
+      "output": "src/assets/3d/close.png",
+      "sha256": "b76284dacfe6a537287be8bf5dc2f0d2e86d59d80b3528d40fccaaa900929a2e"
+    },
+    {
+      "name": "trash",
+      "source": "src/assets/3d/originals/trash.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent PNG UI icon used at 28-64px inside a light macOS app. Style: polished premium 3D product render, porcelain and frosted glass, soft rounded bevels, ambient occlusion in creases, broad upper-left studio key light, subtle lavender/icy blue palette, discernible physical volume and a crisp silhouette. Orthographic mostly frontal view with a slight 12-degree turn to reveal depth; consistent scale. One centered isolated object occupying 78-84% of a square canvas; generous clean margin; genuine transparent alpha outside the object and soft contact shadow. No background plane, no card, no enclosing square tile except when explicitly requested, no scene, no text, no watermark. This must look like a small beautifully rendered real three-dimensional object, not a flat outlined icon.\nSubject: A miniature rounded trash bin, frosted blush-pink body with fine vertical ribs, pearl-white lid and handle, sophisticated and recognizable, no letters.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/trash.png",
+      "output": "src/assets/3d/trash.png",
+      "sha256": "6f5a983077cb93a1d18507ba046e02bc771e651524c8f90f62380ffa8667e0ab"
+    },
+    {
+      "name": "button-porcelain",
+      "source": "src/assets/3d/originals/button-porcelain.png",
+      "prompt": "Use case: stylized-concept. Asset type: reusable raster texture for an actual application's rounded rectangular button surface. Create one perfectly frontal orthographic 3D rounded rectangle button made of pearl-white porcelain, subtle icy-blue lower edge. Landscape 3:1 composition. The rounded rectangle occupies the entire canvas edge-to-edge, very small corner rounding, no exterior margin and no exterior backdrop. Deep chamfered edge around the perimeter, generous upper-left soft studio highlights, a gently convex smooth broad center with plenty of visually quiet space for live UI text to be overlaid later. Very tangible physical thickness in the lower bevel, glossy satin finish, elegant and premium. No icon, no symbol, absolutely no text, no watermark. This is the button's surface texture only, not a mockup or a scene.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/button-porcelain.png",
+      "output": "src/assets/3d/button-porcelain.png",
+      "sha256": "b899fa5a5277a47fdf654ef3c11c3f1a5dfd5e70b805373a76fd754d74db6200"
+    },
+    {
+      "name": "button-violet",
+      "source": "src/assets/3d/originals/button-violet.png",
+      "prompt": "Use case: stylized-concept. Asset type: reusable raster texture for an actual application's rounded rectangular button surface. Create one perfectly frontal orthographic 3D rounded rectangle button made of rich periwinkle-purple translucent resin, luminous lilac highlights and a darker lavender lower edge. Landscape 3:1 composition. The rounded rectangle occupies the entire canvas edge-to-edge, very small corner rounding, no exterior margin and no exterior backdrop. Deep chamfered edge around the perimeter, generous upper-left soft studio highlights, a gently convex smooth broad center with plenty of visually quiet space for live UI text to be overlaid later. Very tangible physical thickness in the lower bevel, glossy satin finish, elegant and premium. No icon, no symbol, absolutely no text, no watermark. This is the button's surface texture only, not a mockup or a scene.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/button-violet.png",
+      "output": "src/assets/3d/button-violet.png",
+      "sha256": "a65c6c0f27189d436e2267e94d7a6cfbf9eb5ef97274abcd24fabf0d3c7fc048"
+    },
+    {
+      "name": "nutrition",
+      "source": "src/assets/3d/originals/nutrition.png",
+      "prompt": "Create one production UI icon PNG with true transparent alpha background, square canvas. A premium tactile 3D macOS wellbeing app icon: a softly rounded porcelain squircle tile, pale celadon green with icy blue shaded edges, glossy pearl ceramic. On the tile a sculpted small round dinner plate with a silver fork to its left and a fresh mint-green leaf resting on the plate. Simple single clear dinner symbol. Near-frontal view, slightly visible lower and right depth, light from upper left, soft ambient contact shadow that fades to transparent. Tile occupies 80 percent of canvas, centered with generous transparent margin, no backdrop, no text, no letters, no watermark, no extra objects. Match high-end luminous lavender/ice-blue/pearl 3D system icons. Readable at 48 pixels. Output only this one icon.",
+      "tool": "image_gen.imagegen",
+      "mode": "built-in",
+      "original": "src/assets/3d/originals/nutrition.png",
+      "output": "src/assets/3d/nutrition.png",
+      "sha256": "72f3add6ac90015e0f78b7ee6aed27c2380f19e71e9e53571bc84afd265e81dc"
+    }
+  ]
+}

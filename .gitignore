@@ -1,0 +1,39 @@
+# Dependencies and generated builds
+node_modules/
+dist/
+.repack-stage/
+coverage/
+*.log
+.DS_Store
+
+# Local records, credentials, photos and backups
+backups/
+skin-photos/
+face-reshape-data.json
+face-reshape-data.json.tmp
+hub-today.json
+hub-today.json.tmp
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.bak
+*.pem
+*.key
+*.p12
+.env
+.env.*
+!.env.example
+tests/.electron-profile/
+
+# Local agent state and private review material
+.impeccable/
+.mimosa/
+.v2c/
+.video_agent/
+.codex/
+.agents/
+.window-*.cjs
+PORT-NOTES.md
+DESIGN.md
+PRODUCT.md

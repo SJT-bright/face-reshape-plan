@@ -1,0 +1,73 @@
+{
+  "name": "face-reshape-plan",
+  "productName": "面部重塑计划",
+  "version": "1.3.0",
+  "description": "面部重塑计划 —— 跟练 · 护肤 · 饮食与睡眠记录 · 成就地图（macOS 桌面应用）",
+  "author": "Face Reshape Plan",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "npm run test:unit && npm run test:rhythm-ui && npm run test:icons && npm run test:app-icon && npm run test:calendar",
+    "test:icons": "electron tests/test-icons.js",
+    "test:app-icon": "electron tests/test-app-icon.js",
+    "icon": "electron scripts/gen-icon.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "assets:3d": "electron scripts/prepare-3d-assets.js",
+    "test:rhythm": "node --test tests/test-rhythm.js",
+    "test:rhythm-ui": "node tests/run-rhythm-ui.js",
+    "test:calendar": "node tests/run-calendar-ui.js",
+    "test:unit": "node --test tests/test-ai-flow.js tests/test-confirm-modal.js tests/test-file-perms.js tests/test-import.js tests/test-muscle-progress.js tests/test-plan-text.js tests/test-rhythm.js tests/test-scoring-v2.js tests/test-skin-engine.js tests/test-strength.js tests/test-timer-flow.js tests/test-timer-ui-module.js tests/test-trends.js"
+  },
+  "devDependencies": {
+    "css-select": "^7.0.0",
+    "css-tree": "^3.2.1",
+    "domutils": "^4.0.2",
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3",
+    "htmlparser2": "^12.0.0"
+  },
+  "build": {
+    "appId": "com.faceshape.plan",
+    "productName": "面部重塑计划",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "assets/**/*",
+      "!src/assets/3d/originals/**/*"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.healthcare-fitness",
+      "icon": "assets/icon-source-3d.png",
+      "minimumSystemVersion": "13.0.0",
+      "darkModeSupport": true,
+      "extendInfo": {
+        "NSUserNotificationsUsageDescription": "用于在训练时间到达时提醒你开始瘦脸跟练。"
+      }
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SJT-bright/face-reshape-plan.git"
+  },
+  "homepage": "https://github.com/SJT-bright/face-reshape-plan#readme",
+  "bugs": {
+    "url": "https://github.com/SJT-bright/face-reshape-plan/issues"
+  }
+}
