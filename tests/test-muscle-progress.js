@@ -73,13 +73,29 @@ test('每周 10 组目标封顶：组数完成度最高 100', () => {
   assert.ok(chest.recentSets >= 40);
 });
 
-test('无力量数据时 strengthScore 为 null，综合 = 0.85×增肌 + 0.15×频率', () => {
+test('纯自重高次：strengthScore 为 null，综合走仅耐力分支 0.5×增肌 + 0.3×耐力 + 0.2×频率', () => {
+  /* 预期行为变更（docs/muscle-endurance-design.md §4）：自重高次有次数容量 → enduranceScore 非 null，
+     综合分从旧 0.85/0.15 分支迁到 0.5/0.3/0.2 仅耐力分支（首窗耐力趋势为 50 基线，分数回落属预期） */
   const rows = [obs(DAY, '俯卧撑', 4, '15', '')];
   const result = Core.buildMuscleProgress(rows, DAY);
   const chest = result.find((m) => m.key === 'chest');
   assert.equal(chest.strengthScore, null);
-  assert.equal(chest.overallScore, Math.round(0.85 * chest.hypertrophyScore + 0.15 * chest.frequencyScore));
+  assert.ok(chest.enduranceScore !== null); // 15 次×4 组计入次数容量，耐力分可算
+  /* 最小修正（docs/muscle-endurance-design.md §11.2）：关系式本身不变；v2 绝对耐力分恰使综合分
+     落在四舍五入边界——引擎内部用未取整频率（1/8×100=12.5）参与合成，输出字段 frequencyScore 为
+     取整后的 13，故按 ±1 舍入容差断言 0.5/0.3/0.2 分支权重 */
+  const expected = 0.5 * chest.hypertrophyScore + 0.3 * chest.enduranceScore + 0.2 * chest.frequencyScore;
+  assert.ok(Math.abs(chest.overallScore - expected) <= 1);
   assert.equal(chest.confidence, 'limited'); // 只有 1 天、无上期
+});
+
+test('近窗未记次数：enduranceScore 为 null，综合维持旧 0.85/0.15 分支不变', () => {
+  const rows = [obs(DAY, '卧推', 4, '', '40kg')];
+  const result = Core.buildMuscleProgress(rows, DAY);
+  const chest = result.find((m) => m.key === 'chest');
+  assert.equal(chest.enduranceScore, null); // 近窗 repVolume = 0（无任何已知次数）
+  assert.equal(chest.strengthScore, null); // 无 ≤10 次负重组 → 无 e1RM 锚点
+  assert.equal(chest.overallScore, Math.round(0.85 * chest.hypertrophyScore + 0.15 * chest.frequencyScore));
 });
 
 test('有上期对比时力量趋势参与综合评分，置信度可到 good', () => {
@@ -120,4 +136,24 @@ test('从训练日快照收集观测：跳过日排除、日期过滤正确', ()
   const chest = Core.muscleProgress(state, '2026-09-12').find((m) => m.key === 'chest');
   assert.equal(chest.recentSets, 4);
   assert.equal(chest.lastTrainedAt, '2026-09-10');
+});
+
+test('动作名→肌群规则审计：细分族优先于宽泛族（后束/面拉、举腿、反屈伸、转腕、直臂上拉、挺身、农夫）', () => {
+  assert.deepEqual(Core.inferMuscleWeights('俯身哑铃飞鸟', ''), { shoulders: 1, back: 0.5 });
+  assert.deepEqual(Core.inferMuscleWeights('反向飞鸟', ''), { shoulders: 1, back: 0.5 });
+  assert.deepEqual(Core.inferMuscleWeights('面拉', ''), { shoulders: 1, back: 0.5 });
+  assert.deepEqual(Core.inferMuscleWeights('悬挂举腿', ''), { core: 1 });
+  assert.deepEqual(Core.inferMuscleWeights('仰卧举腿', ''), { core: 1 });
+  assert.deepEqual(Core.inferMuscleWeights('凳上反屈伸', ''), { triceps: 1, chest: 0.5 });
+  assert.deepEqual(Core.inferMuscleWeights('双杠臂屈伸', ''), { triceps: 1, chest: 0.5 });
+  assert.deepEqual(Core.inferMuscleWeights('哑铃水平转腕', ''), { forearms: 1 });
+  assert.deepEqual(Core.inferMuscleWeights('腕弯举', ''), { forearms: 1 });
+  assert.deepEqual(Core.inferMuscleWeights('直臂下压', ''), { back: 1, chest: 0.5 });
+  assert.deepEqual(Core.inferMuscleWeights('山羊挺身', ''), { hamstrings: 1, glutes: 0.5, back: 0.5 });
+  assert.deepEqual(Core.inferMuscleWeights('农夫行走', ''), { forearms: 1, core: 0.5 });
+  /* 宽泛族不回归 */
+  assert.deepEqual(Core.inferMuscleWeights('哑铃飞鸟', ''), { chest: 1, triceps: 0.5, shoulders: 0.5 });
+  assert.deepEqual(Core.inferMuscleWeights('哑铃弯举', ''), { biceps: 1, forearms: 0.5 });
+  assert.deepEqual(Core.inferMuscleWeights('高位下拉', ''), { back: 1, biceps: 0.5, forearms: 0.5 });
+  assert.deepEqual(Core.inferMuscleWeights('卧推', ''), { chest: 1, triceps: 0.5, shoulders: 0.5 });
 });

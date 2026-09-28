@@ -1,0 +1,46 @@
+.growth-home{display:flex;align-items:center;justify-content:space-between;gap:18px}.growth-home p{margin:6px 0 0}.growth-hero h2{font-size:30px;line-height:1.3;margin:20px 0 12px}.growth-tasks{display:grid;gap:12px}.growth-task{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--border, #aaa5)}.growth-task>div{flex:1}.growth-task p{margin:6px 0}.growth-task label{white-space:nowrap;font-size:13px}.growth-task input{accent-color:#7560cb}.growth-prices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:20px 0}.growth-prices article{border:1px solid var(--border,#aaa5);border-radius:18px;padding:20px;display:flex;flex-direction:column;align-items:flex-start}.growth-prices h4{margin:0 0 14px}.growth-prices strong{font-size:22px}.growth-prices p{flex:1;line-height:1.7}.growth-metrics{display:flex;gap:48px;margin:22px 0}.growth-metrics strong{display:block;font-size:32px}.growth-metrics small{font-size:15px;font-weight:400}.growth-metrics span{font-size:14px}.growth-report-text{width:100%;min-height:240px;resize:vertical;margin-bottom:16px}.growth-view button:focus-visible,.growth-view input:focus-visible{outline:3px solid #8978ed;outline-offset:4px}@media(max-width:1050px){.growth-prices{grid-template-columns:1fr}.growth-task{flex-wrap:wrap}.growth-task>div{min-width:180px}.growth-hero h2{font-size:25px}}@media(max-width:760px){.growth-home{align-items:flex-start;flex-direction:column}}
+
+/* Growth workspace: task first, compact review, pricing on demand. */
+.growth-view{padding-bottom:100px}
+.growth-heading{display:flex;justify-content:space-between;gap:28px;align-items:center}
+.growth-heading>div:first-child{max-width:64ch}
+.growth-kicker{font-size:13px;font-weight:650;color:#625689}
+.growth-hero h2{margin:12px 0;font-size:28px;line-height:1.35;text-wrap:balance}
+.growth-hero p{margin:8px 0 20px;line-height:1.7}
+.growth-progress{min-width:130px;display:grid;gap:8px;font-size:13px}
+.growth-progress strong{font-size:34px;font-variant-numeric:tabular-nums}
+.growth-progress small{font-size:16px;font-weight:500}
+.growth-progress progress{width:130px;height:8px;accent-color:#7f73e6}
+.growth-section-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.growth-section-heading h3{margin:0}
+.growth-section-heading .hint{margin:6px 0}
+.growth-day{display:grid;gap:5px;min-width:50px;text-align:center;font-size:21px;font-weight:700;color:#67578c;font-variant-numeric:tabular-nums}
+.growth-day small{font-size:11px;font-weight:500}
+.growth-task{gap:16px;padding:18px 8px}
+.growth-task.is-today{background:rgba(127,115,230,.08);border-radius:12px}
+.growth-task.is-done .growth-day{color:#287251}
+.growth-task .btn{min-width:128px}
+.growth-task label{min-width:82px;display:flex;align-items:center;gap:5px;cursor:pointer}
+.growth-task input{width:17px;height:17px}
+.growth-chart{list-style:none;margin:24px 0 20px;padding:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px;font-size:12px;font-variant-numeric:tabular-nums}
+.growth-chart li{display:grid;gap:8px;text-align:center;align-content:end}
+.growth-bar-track{height:76px;display:flex;align-items:end;justify-content:center;border-bottom:1px solid #8e97aa66}
+.growth-bar-track i{display:block;width:26px;max-width:70%;background:#897cbd;border-radius:6px 6px 0 0}
+.growth-sr{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.growth-metrics{align-items:center;gap:32px}
+.growth-metrics>p{margin-left:auto;max-width:24ch}
+#growth-goal-form{flex-wrap:wrap;gap:12px}
+#growth-target{width:auto;min-width:86px}
+#growth-goal-status{font-size:13px}
+.growth-pricing summary,.growth-history summary{cursor:pointer;font-weight:650;line-height:1.7}
+.growth-pricing summary .hint{font-size:12px;font-weight:400;margin-left:12px}
+.growth-pricing[open] summary,.growth-history[open] summary{margin-bottom:20px}
+.growth-view summary:focus-visible,.growth-view select:focus-visible{outline:3px solid #8978ed;outline-offset:4px}
+html.dark .growth-kicker,html.dark .growth-day{color:#c7bbeb}
+html.dark .growth-task.is-done .growth-day{color:#8adab5}
+html.dark .growth-task.is-today{background:rgba(173,156,224,.12)}
+html.dark .growth-task,html.dark .growth-prices article{border-color:#526078}
+html.dark .growth-bar-track i{background:#ad9ce0}
+@media(max-width:1050px){.growth-task{display:grid;grid-template-columns:48px minmax(0,1fr) auto}.growth-task>div{min-width:0}.growth-task label{grid-column:2}.growth-task .btn{grid-column:3;grid-row:1 / 3}.growth-metrics{gap:20px}.growth-metrics>p{max-width:18ch}.growth-hero h2{font-size:24px}}
+@media(max-width:760px){.growth-heading{align-items:flex-start;flex-direction:column}.growth-progress{grid-template-columns:auto auto;align-items:center}.growth-progress progress{grid-column:1 / -1}.growth-task{grid-template-columns:42px minmax(0,1fr)}.growth-task .btn{grid-column:2;grid-row:auto;justify-self:start}.growth-metrics{flex-wrap:wrap}.growth-metrics>p{margin-left:0;max-width:none}.growth-chart{gap:5px}}
+@media(prefers-reduced-motion:reduce){.growth-view *{scroll-behavior:auto!important}}

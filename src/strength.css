@@ -1,5 +1,21 @@
 /* 力量训练 —— 从「个人积累库」健身板块移植；沿用工作台视觉：瓷白光场、冷银钛金属、雾蓝玻璃 */
 
+/* ===== 进步可视化视觉参数 token（docs/progress-visual-params-design.md §4）
+   浅色值定义于此；暗色只在 dark.css 的 html.dark 里覆盖同名变量，组件样式一律消费 token ===== */
+:root {
+  --st-tier-foundation: #9aa69f;      /* 档 1 待建立 */
+  --st-tier-developing: #c59c58;      /* 档 2 发展中 */
+  --st-tier-solid: #70aa8a;           /* 档 3 稳固 */
+  --st-tier-excellent: #3f8f6c;       /* 档 4 出色 */
+  --st-nodata: rgba(121, 139, 130, 0.28);   /* 无数据热区/空轨 */
+  --st-dim-hypertrophy: #6d5df1;      /* 增肌维度条填充 */
+  --st-dim-strength: #4f7cff;         /* 力量维度条填充 */
+  --st-dim-endurance: #0f7f95;        /* 耐力维度条填充（专属青色，色盲安全） */
+  --st-delta-up: #15803d;             /* 趋势变好 */
+  --st-delta-down: #c2410c;           /* 趋势变差 */
+  --st-delta-flat: rgba(44, 58, 71, 0.55); /* 持平/数据不足 */
+}
+
 /* 视图标签页 */
 .st-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
 .st-tab {
@@ -86,6 +102,41 @@
 .st-meter { height: 10px; overflow: hidden; border-radius: 999px; background: rgba(44, 58, 71, 0.1); }
 .st-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(135deg, #6d5df1, #4f7cff); transition: width 320ms cubic-bezier(0.22, 0.61, 0.36, 1); }
 
+/* 维度条：填充 = 维度身份色（P3.5，不随分数档变色；文字承载档位信息） */
+.st-meter-row--hypertrophy .st-meter i { background: var(--st-dim-hypertrophy); }
+.st-meter-row--strength .st-meter i { background: var(--st-dim-strength); }
+.st-meter-row--endurance .st-meter i { background: var(--st-dim-endurance); }
+/* 耐力条唯一图形冗余：条右端 6px 圆点（P3.6，灰度打印/截图下仍可指认） */
+.st-meter-row--endurance .st-meter { position: relative; }
+.st-meter-row--endurance .st-meter::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--st-dim-endurance);
+}
+/* 三态（§3）：无数据 = 虚线空轨 + 灰色「—」；0 分 = 档 1 色 8px 圆头实色小段「待建立」 */
+.st-meter-row--empty .st-meter { border: 1px dashed var(--st-nodata); }
+.st-meter-row--empty strong { color: var(--st-delta-flat); }
+.st-meter-row--zero .st-meter i { min-width: 8px; background: var(--st-tier-foundation); }
+/* 趋势 chip（P6.2/P7.2）：数值右侧、12px/700；箭头 span 由 JS 置 aria-hidden，语义在条 aria-label */
+.st-meter-val { display: inline-flex; align-items: baseline; gap: 6px; }
+.st-delta { font-size: 12px; font-weight: 700; color: var(--st-delta-flat); }
+.st-delta[data-tone="up"] { color: var(--st-delta-up); }
+.st-delta[data-tone="down"] { color: var(--st-delta-down); }
+/* 达标徽标（P10.3）：档 4 色 12% 透明底 + 档 4 色文字，静态无动画 */
+.st-excellent-badge {
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--st-tier-excellent) 12%, transparent);
+  color: var(--st-tier-excellent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .st-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; overflow: hidden; border: 1px solid rgba(44, 58, 71, 0.08); border-radius: 10px; }
 .st-facts div { display: grid; gap: 2px; padding: 9px; border-right: 1px solid rgba(44, 58, 71, 0.08); border-bottom: 1px solid rgba(44, 58, 71, 0.08); }
 .st-facts div:nth-child(3n) { border-right: 0; }
@@ -115,24 +166,39 @@
   .st-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .st-facts div:nth-child(3n) { border-right: 1px solid rgba(44, 58, 71, 0.08); }
   .st-facts div:nth-child(2n) { border-right: 0; }
+  /* P8.2：紧凑态 hero 缩到 44px；维度条首行兜底换行（名上、值下） */
+  .st-scorehero strong { font-size: 44px; }
+  .st-meter-row > div:first-child { flex-wrap: wrap; }
 }
 
-/* 计时行 */
-.st-timer-row {
+/* 今日训练所属：练的时候直接换模板 / 训练日 */
+.st-belong {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
-  margin: 10px 0 14px;
+  gap: 8px 12px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .55);
 }
-.st-timer {
-  font-variant-numeric: tabular-nums;
-  font-size: 34px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--text-main, #2c3a47);
-  min-width: 110px;
+.st-belong-k {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(44, 58, 71, .55);
 }
-.st-timer.running { color: var(--accent, #4f7cff); }
+.st-belong .input {
+  width: auto;
+  min-width: 148px;
+  max-width: 260px;
+}
+.st-belong .hint { flex: 1 1 200px; margin: 0; }
+
+/* 力量训练时机：按上一次进食给出钟点，不倒计时 */
+.st-meal-hint p { margin: 6px 0 0; line-height: 1.55; }
+.st-meal-hint .hint { white-space: normal; }
 
 /* 计划 vs 实际表格 */
 .st-table {
@@ -190,6 +256,7 @@
   gap: 10px;
   margin-top: 10px;
 }
+.stat-row.st-stats-3 { grid-template-columns: repeat(3, 1fr); }
 
 /* ===== 第二轮移植：六标签页全量视图 =====
    日期导航 / 日期表单 / 补剂打卡 / 训练日模板编辑器 / 历史分页 / 模板更新记录 / 成长曲线 */
@@ -344,7 +411,7 @@
 /* 模板编辑器动作行：宽屏 6 列（动作名/组数/次数/负重/目标/删除），≤900px 自动重排为三行 */
 .st-act-grid, .st-act-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1.6fr) 64px 84px 104px minmax(110px, 1.1fr) 40px;
+  grid-template-columns: minmax(120px, 1.6fr) 64px 84px 104px minmax(110px, 1.1fr) 108px;
   gap: 6px;
   align-items: center;
   min-width: 0;
@@ -487,11 +554,16 @@
 }
 .st-session-row > div:last-child, .st-sess-desc { font-size: 11.5px; line-height: 1.55; color: rgba(44, 58, 71, 0.55); }
 
+/* 减少动态（P10.2）：ux.css 全局兜底之外的本页保险——维度条填充与 hero 数字不再过渡 */
+@media (prefers-reduced-motion: reduce) {
+  .st-meter i, .st-scorehero strong { transition: none; }
+}
+
 /* 窄窗口回退 */
 @media (max-width: 860px) {
   .st-tr { grid-template-columns: 1.3fr 1fr 64px 84px 72px; }
   .st-tr .st-last { display: none; }
-  .stat-row { grid-template-columns: repeat(2, 1fr); }
+  .stat-row, .stat-row.st-stats-3 { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* 窄窗口回退（第二轮新增组件） */
@@ -507,7 +579,7 @@
   .st-act-grid { display: none; }
   .st-act-row { grid-template-columns: 1fr 1fr 1fr; row-gap: 6px; }
   .st-act-row input[data-akey="name"] { grid-row: 1; grid-column: 1 / 3; }
-  .st-act-row button[data-del-act] { grid-row: 1; grid-column: 3; justify-self: end; }
+  .st-act-row > div:last-child { grid-row: 1; grid-column: 3; display: flex; justify-content: flex-end; }
   .st-act-row input[data-akey="plannedSets"] { grid-row: 2; grid-column: 1; }
   .st-act-row input[data-akey="plannedRepsText"] { grid-row: 2; grid-column: 2; }
   .st-act-row input[data-akey="plannedWeightText"] { grid-row: 2; grid-column: 3; }

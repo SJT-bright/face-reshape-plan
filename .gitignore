@@ -9,6 +9,11 @@ coverage/
 # Local records, credentials, photos and backups
 backups/
 skin-photos/
+body-photos/
+imported-videos/
+皮肤照片/
+健身照片/
+跟练视频/
 face-reshape-data.json
 face-reshape-data.json.tmp
 hub-today.json
@@ -33,7 +38,14 @@ tests/.electron-profile/
 .video_agent/
 .codex/
 .agents/
+.patch-reader/
 .window-*.cjs
 PORT-NOTES.md
 DESIGN.md
 PRODUCT.md
+
+# Portable backups and system-encrypted local API key
+*.frbackup
+ai-key.enc
+ai-key.enc.tmp
+restore-before-*/

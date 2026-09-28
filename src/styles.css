@@ -23,11 +23,12 @@
   --shadow-pop: 0 12px 32px rgba(93, 64, 41, .16);
   --img-bg: url('assets/img/bg-main.png');
   --img-sidebar: url('assets/img/bg-sidebar.png');
+  --app-font: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-family: var(--app-font);
   background: var(--img-bg) no-repeat center/cover fixed,
               linear-gradient(160deg, #fdf3ec 0%, #fae9f3 52%, #efe8fd 100%);
   background-attachment: fixed;

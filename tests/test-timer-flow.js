@@ -68,9 +68,9 @@ test('核心用户流程模拟：开始→走秒→保存→继续走秒→暂�
   // 保存实际数据（P1-1：保存后应恢复走秒）
   Core.saveTraining(state, { date: today, actions: [{ actionKey: 'act-1-1', setsDone: 4, repsText: '10', weightKg: 40 }] }, NOW);
   assert.equal(Core.timerShouldRun(Core.dayRecord(state, today), today), true);
-  timer = { date: today, seconds: 0, running: true }; // _ensureTimerFor 的结果
+  timer = { date: today, seconds: 0, running: true }; // 局部变量模拟旧秒表落盘，不调用页面
   timer.seconds = 20; flush();
-  timer.running = true; // _ensureTimerFor：训练仍在进行 → 秒表继续走
+  timer.running = true;
   // 暂停（先落秒再暂停，不丢秒）
   timer.seconds = 10; flush();
   Core.pauseTraining(state, { date: today }, NOW);

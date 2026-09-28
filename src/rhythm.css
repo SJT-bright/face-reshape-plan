@@ -23,6 +23,12 @@
 .rhythm-record { display:flex; align-items:center; justify-content:space-between; gap:10px; border-bottom:1px solid rgba(138,157,181,.15); padding:9px 0; }
 .rhythm-record strong { font-size:17px; font-variant-numeric:tabular-nums; font-weight:600; }
 .rhythm-record span:not(.icon3d) { display:block; font-size:11px; color:#63748b; margin-top:3px; }
+/* 进餐行：时间 + 餐别徽章单行排布（仅限进餐列表；睡眠/旧记录复用 .rhythm-record 不受影响）。
+   需用 .rhythm-record span.rhythm-meal-chip 压过上面 (0,2,1) 的 span 基础规则 */
+.rhythm-record .rhythm-record-main { display:flex; align-items:center; gap:10px; min-width:0; }
+.rhythm-record span.rhythm-meal-chip { display:inline-block; margin-top:0; flex:none; font-size:11px; font-weight:600; line-height:1; letter-spacing:.3px; padding:4px 10px; border-radius:999px; color:#2f5fe0; background:rgba(91,141,239,.1); border:1px solid rgba(91,141,239,.24); white-space:nowrap; }
+.rhythm-record span.rhythm-meal-chip[data-kind="supper"] { color:#6a63b8; background:rgba(120,112,202,.12); border-color:rgba(120,112,202,.28); }
+.rhythm-record span.rhythm-meal-chip[data-kind="snack"] { color:#5d6d80; background:rgba(99,116,139,.08); border-color:rgba(99,116,139,.24); }
 .rhythm-empty { color:#8290a2; font-size:13px; padding:14px 0 20px; }
 .rhythm-check { display:flex; align-items:center; gap:7px; color:#53667b; font-size:12px; cursor:pointer; }
 .rhythm-check input { width:16px; height:16px; min-height:0; accent-color:#7870ca; }

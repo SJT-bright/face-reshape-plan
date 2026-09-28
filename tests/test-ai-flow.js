@@ -24,6 +24,7 @@ function el(overrides = {}) {
 }
 
 global.todayKey = () => TODAY;
+global.uid = (prefix) => (prefix || 'id') + '_test';
 global.toast = (msg) => toasts.push(msg);
 let confirmResult = true;
 let confirmCalls = [];
@@ -37,6 +38,7 @@ global.$$ = (sel, scope) => (scope && scope.querySelectorAll ? scope.querySelect
 global.Store = {
   db: {
     skin: { logs: {}, photos: [], predictions: {}, stats: { seen: 0, hit: 0 } },
+    rhythm: { sleeps: [], meals: [] },
     settings: { aiApiKey: STUB_KEY, aiModel: 'glm-4v-flash' }
   },
   settings() { return this.db.settings; },
@@ -45,7 +47,8 @@ global.Store = {
 let analyzeResult = { ok: true, data: {} };
 global.native = {
   analyzeSkinPhoto: async () => { calls.analyze++; return analyzeResult; },
-  readSkinPhoto: async () => { calls.read++; return 'c3R1Yg=='; }
+  readSkinPhoto: async () => { calls.read++; return 'c3R1Yg=='; },
+  saveSkinPhoto: async () => 'p-mock.jpg'
 };
 /* 假 canvas（成功压缩路径用）与假 Image：imageMode 控制走 onload 还是 onerror */
 let imageMode = 'load';
@@ -207,6 +210,14 @@ test('填充计数：整数串入表、小数拒绝、计数准确、摘要写�
   assert.ok(toasts.some((m) => m.includes('AI 已填入 0/9 项') && m.includes('1 项无效已跳过')));
 });
 
+test('面部状态三字段先预填，人工保存前不写正式记录', async () => {
+  reset({});
+  await Skincare._applyAiResult({ fullness: 2, puffiness: '3', definition: 1, oil: 99, summary: '面' }, '2026-09-10');
+  assert.equal(SkinEngine.latestFaceState(Store.db, '2026-09-10',14),null);
+  assert.equal(Skincare.pendingAi.data.fullness,2);
+  assert.equal(Skincare.pendingAi.photoDate,'2026-09-10');
+});
+
 test('同一 img 连续 正常→缺失→正常：src/alt/title/missing 状态完整重置', async () => {
   reset({});
   const img = el(); img.alt = '2026-09-10'; img.dataset = { photoFile: 'a.jpg' };
@@ -273,4 +284,56 @@ test('逆序响应：慢的旧文件响应不得覆盖新文件', async () => {
   assert.ok(img.src.includes('ZGF0YUM='), '慢的 B 响应不得覆盖 C');
   assert.ok(!('missing' in img.dataset));
   global.native.readSkinPhoto = origRead;
+});
+
+test('P6：迟到的睡眠与皮肤资料重新计算，删除来源恢复缺项', async () => {
+  reset({}); Store.db.rhythm={sleeps:[],meals:[]};
+  Skincare._ensureTodayPrediction(); assert.equal(Store.db.skin.predictions[TODAY].overallDir,null);
+  Store.db.rhythm.sleeps=[{start:'2026-09-14T01:30:00+08:00',end:'2026-09-14T06:30:00+08:00',startLocal:'2026-09-14T01:30',endLocal:'2026-09-14T06:30',kind:'main'}];
+  Skincare._ensureTodayPrediction();assert.equal(Store.db.skin.predictions[TODAY].status,'partial');
+  Store.db.skin.logs['2026-09-13']={redness:0};Skincare._ensureTodayPrediction();assert.equal(Store.db.skin.predictions[TODAY].overallDir,'down');
+  Store.db.rhythm.sleeps=[];Skincare._ensureTodayPrediction();assert.equal(Store.db.skin.predictions[TODAY].overallDir,null);
+});
+
+test('P9：照片按日期倒序，回填历史日期生效、未来日期拒绝', async () => {
+  reset({});
+  Store.db.skin.photos = [
+    { id: 'p1', date: '2026-09-12', kind: 'skin', file: 'a.jpg', createdAt: '2026-09-12T08:00:00Z' },
+    { id: 'p2', date: '2026-09-14', kind: 'skin', file: 'b.jpg', createdAt: '2026-09-14T08:00:00Z' },
+    { id: 'p3', date: '2026-09-13', kind: 'skin', file: 'c.jpg', createdAt: '2026-09-13T08:00:00Z' }
+  ];
+  /* 列表日期倒序（添加顺序无关） */
+  assert.deepEqual(Skincare._photoList('skin').map((p) => p.id), ['p2', 'p3', 'p1']);
+  /* 回填历史日期：照片记录为所选日期 */
+  registry.set('#sk-photo-date', { value: '2026-09-11' });
+  registry.set('#sk-photo-weight', { value: '' });
+  const fakeFile = { type: 'image/png', arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer };
+  await Skincare._addPhotoFiles([fakeFile]);
+  const added = Store.db.skin.photos.find((p) => p.file === 'p-mock.jpg');
+  assert.ok(added, '应入库');
+  assert.equal(added.date, '2026-09-11');
+  /* 未来日期拒绝：回落到今天 */
+  registry.get('#sk-photo-date').value = '2026-09-20';
+  await Skincare._addPhotoFiles([fakeFile]);
+  const addedAll = Store.db.skin.photos.filter((p) => p.file === 'p-mock.jpg');
+  assert.equal(addedAll.length, 2);
+  assert.equal(addedAll[1].date, TODAY);
+  assert.ok(toasts.some((m) => m.includes('拍摄日期无效')));
+});
+
+test('UX-18 页面换代后迟到的 AI 结果不进入新表单', async () => {
+  reset({ photos: [{id:'stale-photo',date:TODAY,kind:'skin',file:'synthetic.jpg'}] });
+  App.currentView='skincare';App._uxRenderEpoch=1;
+  let release;const gate=new Promise(resolve=>{release=resolve;});const original=global.native.analyzeSkinPhoto;
+  global.native.analyzeSkinPhoto=async()=>{calls.analyze++;await gate;return {ok:true,data:{acneTotal:9,summary:'不应填入的新页面'}};};
+  try{const work=Skincare._aiAnalyze();await new Promise(resolve=>setImmediate(resolve));App._uxRenderEpoch=2;release();await work;
+    assert.equal(registry.get('#sk-acne-total').value,'');assert.ok(toasts.some(x=>x.includes('旧识图结果未填入')));
+  }finally{global.native.analyzeSkinPhoto=original;delete App._uxRenderEpoch;}
+});
+
+test('UX-18 自动默认关闭、仅记录页触发、同日去重且未确认不落正式记录', async () => {
+  reset({photos:[{id:'auto-photo',date:TODAY,kind:'skin',file:'synthetic.jpg'}]});Store.db.skin.logs={};delete Store.db.skin.aiAutoRun;Skincare.ui.tab='record';Store.db.settings.skinAutoAnalyze=false;
+  const original=Skincare._aiAnalyze;let starts=0;Skincare._aiAnalyze=()=>{starts++;};
+  try{Skincare._maybeAutoAnalyze();assert.equal(starts,0);Store.db.settings.skinAutoAnalyze=true;Skincare.ui.tab='care';Skincare._maybeAutoAnalyze();assert.equal(starts,0);Skincare.ui.tab='record';Skincare._maybeAutoAnalyze();Skincare._maybeAutoAnalyze();assert.equal(starts,1);assert.equal(Store.db.skin.logs[TODAY],undefined);assert.equal(Store.db.skin.aiAutoRun.file,'synthetic.jpg');
+  }finally{Skincare._aiAnalyze=original;Store.db.settings.skinAutoAnalyze=false;delete Store.db.skin.aiAutoRun;}
 });

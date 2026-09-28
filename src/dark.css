@@ -1,0 +1,162 @@
+/* 夜间模式：html.dark 时覆盖主要表面与文字色。
+   应用样式大量为瓷白硬编码色，这里按「表面变暗、文字变亮」逐组覆盖；
+   覆盖不完全之处以局部微调迭代，不追求像素级完美。 */
+html.dark body { background: #10151f; color: #d7deea; }
+html.dark #sidebar { background: #141b27; border-color: rgba(255,255,255,.06); }
+html.dark .nav-item { color: #8b97ab; }
+html.dark .nav-item:hover { background: rgba(255,255,255,.06); color: #d7deea; }
+html.dark .nav-item.active { background: rgba(255,255,255,.1); color: #e8edf5; box-shadow: 0 10px 24px rgba(0,0,0,.4); }
+html.dark #topbar { background: #151c29; }
+html.dark #page-title { color: #d7deea; }
+html.dark .pl-quick-fold-btn {
+  background: linear-gradient(145deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+  color: #d7deea;
+  box-shadow: 0 6px 14px rgba(0,0,0,.3);
+}
+html.dark .pl-quick-fold[open] {
+  background: #1a2332;
+  box-shadow: 0 10px 24px rgba(0,0,0,.4);
+}
+html.dark .pl-quick-fold[open] > .pl-quick-fold-btn {
+  background: transparent;
+  box-shadow: none;
+  color: #d7deea;
+}
+html.dark .pl-quick-fold-lead { color: #93a1b5; }
+html.dark .card, html.dark .cycle-card, html.dark .rhythm-card,
+html.dark .stat-box, html.dark .sk-col, html.dark .sk-step, html.dark .today-item,
+html.dark .session-item, html.dark .st-bmi,
+html.dark .sk-pred-item, html.dark .st-act-row, html.dark .st-wday,
+html.dark .sk-photo-thumb, html.dark .st-tpl-day, html.dark .sk-drop,
+html.dark .sk-detail, html.dark .st-history-row, html.dark .mini-stat {
+  background: #1a2332 !important;
+  border-color: rgba(255,255,255,.08) !important;
+  color: #d7deea;
+}
+html.dark .card h3, html.dark .card b, html.dark .stat-box b, html.dark .sk-param-label,
+html.dark .t-name b, html.dark .cycle-head b, html.dark .sk-name, html.dark #modal-card,
+html.dark .st-detail h4, html.dark .st-bmi h4, html.dark .rhythm-page,
+html.dark .rhythm-intro h1, html.dark .rhythm-heading h2, html.dark .timer-hud {
+  color: #d7deea;
+}
+html.dark .hint, html.dark .rhythm-caption, html.dark .sk-detail, html.dark .vid-meta,
+html.dark .ab-card { background: #1a2332; border-color: rgba(255,255,255,.08); }
+html.dark .ab-card-name { color: #d7deea; }
+html.dark .ab-card-lv { color: #b3a7f5; }
+html.dark .ab-card-desc { color: #7a8798; }
+html.dark .ab-tier-cell { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.09); }
+html.dark .ab-tier-cell b, html.dark .ab-tier-cell span, html.dark .ab-tier-cell small { color: #93a1b5; }
+html.dark .ab-tier-cell.got { background: rgba(72,170,130,.1); border-color: rgba(72,170,130,.28); }
+html.dark .ab-tier-cell.got b, html.dark .ab-tier-cell.got span, html.dark .ab-tier-cell.got small { color: #4ade80; }
+html.dark .ab-tier-cell.cur { border-color: #b3a7f5; box-shadow: 0 0 0 2px rgba(139,124,245,.2); }
+html.dark .ab-progress-track { background: rgba(255,255,255,.08); }
+html.dark .input, html.dark .select, html.dark .textarea,
+html.dark .rhythm-page input, html.dark .rhythm-page select { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.14); color: #d7deea; }
+html.dark .btn { background: linear-gradient(145deg, rgba(255,255,255,.08), rgba(255,255,255,.04)); color: #d7deea; box-shadow: 0 6px 14px rgba(0,0,0,.3); }
+html.dark .btn.primary { background: linear-gradient(145deg, #887feb, #6575d5); color: #fff; }
+html.dark .btn.green { background: linear-gradient(145deg, #78d7b0, #48aa82); color: #103c2d; }
+html.dark .btn.ghost { background: rgba(255,255,255,.05); color: #9aa7ba; }
+html.dark .toast, html.dark #modal-card { background: #1c2534; color: #d7deea; }
+html.dark .st-timer { color: #d7deea; }
+html.dark .rhythm-record, html.dark .sk-param-row { border-color: rgba(255,255,255,.08); }
+html.dark .rhythm-record span.rhythm-meal-chip { color:#8fb6ff; background:rgba(91,141,239,.16); border-color:rgba(143,182,255,.35); }
+html.dark .rhythm-record span.rhythm-meal-chip[data-kind="supper"] { color:#c4b5fd; background:rgba(139,92,246,.16); border-color:rgba(196,181,253,.32); }
+html.dark .rhythm-record span.rhythm-meal-chip[data-kind="snack"] { color:#93a1b5; background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.14); }
+html.dark .sk-seg button { background: rgba(255,255,255,.05); color: #9aa7ba; border-color: rgba(255,255,255,.12); }
+html.dark .sk-seg button.on { background: linear-gradient(145deg, #887feb, #6575d5); color: #fff; }
+html.dark .btn.danger { background: linear-gradient(145deg, #7a3b2e, #5c2a20); color: #ffd9cc; }
+html.dark .empty { background: rgba(255,255,255,.04); color: #93a1b5; }
+html.dark .sk-viewer-img { background: rgba(255,255,255,.04); }
+html.dark .chk { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.25); color: #d7deea; }
+html.dark .pill { background: #1a2332; color: #d7deea; }
+html.dark .ac-day, html.dark .ac-detail, html.dark .ac-legend span,
+html.dark .ac-month-summary, html.dark .ac-entry { background: #1a2332; color: #d7deea; }
+html.dark .ac-day.unrecorded { background: rgba(255,255,255,.03); }
+html.dark .st-belong { background: rgba(255,255,255,.05); color: #d7deea; }
+html.dark .st-belong-k { color: #93a1b5; }
+html.dark .st-tr, html.dark .st-tri, html.dark .st-algorithm, html.dark .st-datenav,
+html.dark .st-session-row, html.dark .st-update-row { background: #1a2332; color: #d7deea; }
+html.dark .vid-card, html.dark .vid-del, html.dark .today-top { background: #1a2332; color: #d7deea; }
+html.dark .rhythm-form, html.dark .rhythm-assessment, html.dark .chooser-direct { background: #1a2332; color: #d7deea; }
+/* --- 追加覆盖：整级亮面残留、力量/日历/节律子元素字色、状态色暗色版 ---
+   （.tpl-card 在产品中不存在，未加入） */
+html.dark .course-card, html.dark .course-info, html.dark .course-thumb { background: #1a2332; color: #d7deea; border-color: rgba(255,255,255,.08); }
+html.dark .timer-hud { background: rgba(26,35,50,.92); color: #d7deea; }
+html.dark #mini-session-bar { background: #1a2332; color: #d7deea; }
+html.dark .st-detail p { color: #d7deea; }
+html.dark .st-facts dt { color: #93a1b5; }
+html.dark .st-facts dd { color: #d7deea; }
+html.dark .st-wd-name { color: #d7deea; }
+html.dark .st-wd-num { color: #d7deea; }
+html.dark .st-wd-status { color: #93a1b5 !important; } /* 内联 color 会压过普通规则，需 !important */
+html.dark .st-scorehero strong { color: #d7deea; }
+html.dark .st-dn-cur strong { color: #d7deea; }
+html.dark .st-algorithm summary { color: #d7deea; }
+html.dark .st-bmi p { color: #d7deea; }
+html.dark .st-update-row small { color: #93a1b5; }
+html.dark .ac-detail-date { color: #d7deea; }
+html.dark .ac-detail-total strong { color: #d7deea; }
+html.dark .ac-detail-total span { color: #93a1b5; }
+html.dark .ac-day-value { color: #93a1b5; }
+html.dark .ac-day-top small { color: #93a1b5; }
+html.dark .ac-heading p { color: #93a1b5; }
+html.dark .ac-weekdays span { color: #93a1b5; }
+html.dark .sleep-quality-metrics strong { color: #d7deea; }
+html.dark .rhythm-metrics span { color: #93a1b5; }
+html.dark .rhythm-check { color: #93a1b5; }
+html.dark .rhythm-eyebrow { color: #93a1b5; }
+html.dark .rhythm-error, html.dark .rhythm-conflict { color: #e8a49a; }
+html.dark .tag.done { background: rgba(34,197,94,.16); color: #4ade80; }
+html.dark .tag.now { background: rgba(139,92,246,.16); color: #c4b5fd; }
+html.dark .badge { background: #1a2332; color: #d7deea; border-color: rgba(255,255,255,.1); }
+html.dark .sk-step.done .sk-name { color: #d7deea; }
+html.dark .pill.ok { background: rgba(34,197,94,.14); color: #4ade80; }
+html.dark .pill.part { background: rgba(234,179,8,.14); color: #eab308; }
+html.dark .pill.none { background: rgba(255,255,255,.06); color: #93a1b5; }
+html.dark .mini-stat b { color: #d7deea; }
+html.dark .mini-stat span, html.dark .mini-stat i { color: #93a1b5; }
+html.dark .t-time { color: #93a1b5; }
+html.dark .t-name span { color: #93a1b5; }
+html.dark .wd span { background: rgba(255,255,255,.06); color: #d7deea; }
+html.dark body::before, html.dark body::after, html.dark .today-top::after { display: none; }
+
+/* ID 特异度残留：迷你条「回到跟练」按钮在 image-3d.css 用 #mini-session-open (1,0,0) 定义瓷白面，
+   需同强度覆盖暗面化（否则夜间为亮瓷白块）；vid-del 同理但用类组即可顺带覆盖 */
+html.dark .btn, html.dark .btn-go, html.dark .vid-del, html.dark #mini-session-open {
+  --button-depth: #0c1119;
+  border-color: rgba(255,255,255,.12);
+  background: #1a2332 center / 100% 100% no-repeat; color: #d7deea;
+  box-shadow: 0 3px 0 rgba(0,0,0,.35), 0 9px 18px rgba(0,0,0,.3);
+  text-shadow: none;
+}
+html.dark .btn-go { background: linear-gradient(145deg, #887feb, #6575d5); color: #fff; } /* 主 CTA 保持品牌紫 */
+html.dark .vid-del { background: #2a1e1c; color: #ffb4a1; }
+
+/* 暗色下本轮新增卡片（内联浅色样式的对比度修复，走查 #3） */
+html.dark .rhythm-sleep-advice { color: #b9c6da !important; background: rgba(91,141,239,.12) !important; border-color: rgba(143,182,255,.35) !important; }
+html.dark .rhythm-sleep-advice strong { color: #d7deea !important; }
+html.dark .rhythm-sleep-advice .rhythm-caption { color: #8fa0b8 !important; }
+html.dark .rhythm-sleep-advice input[type="time"] { background: rgba(255,255,255,.06) !important; color: #d7deea !important; border-color: rgba(143,182,255,.35) !important; }
+html.dark .ac-week-review { background: #1a2332 !important; color: #d7deea !important; border-color: rgba(83,102,123,.5) !important; }
+html.dark .ac-week-review span { color: #b9c6da !important; }
+html.dark .ac-week-review b { color: #d7deea !important; }
+html.dark #rh-nutrition [data-sugar] { color: #b9c6da !important; background: transparent !important; }
+html.dark #rh-nutrition [data-sugar][data-sel="1"] { color: #8fb6ff !important; background: rgba(91,141,239,.18) !important; border-color: rgba(143,182,255,.5) !important; }
+html.dark .rhythm-sleep-advice .hint, html.dark #rh-nutrition .rhythm-caption { color: #8fa0b8 !important; }
+
+/* 进步可视化 token 暗色覆盖（docs/progress-visual-params-design.md §4）：
+   strength.css :root 定义浅色值，这里只覆盖变量本身，组件样式一律消费 token */
+html.dark {
+  --st-tier-foundation: #8b97ab;
+  --st-tier-developing: #e2b45c;
+  --st-tier-solid: #8fd8b4;
+  --st-tier-excellent: #4ade80;
+  --st-nodata: rgba(147, 161, 181, 0.20);
+  --st-dim-hypertrophy: #8f84f5;
+  --st-dim-strength: #7d9bff;
+  --st-dim-endurance: #4cc4d9;
+  --st-delta-up: #4ade80;
+  --st-delta-down: #ffb4a1;
+  --st-delta-flat: #93a1b5;
+}
+html.dark .st-meter { background: rgba(255, 255, 255, 0.1); } /* P4.3：暗色轨道（与 .ab-progress-track 同款） */

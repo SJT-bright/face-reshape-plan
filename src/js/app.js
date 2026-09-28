@@ -1,10 +1,11 @@
 /* 应用入口：路由 / 全局跟练计时器 / 提醒联动 / 时钟 */
 
 const Session = {
-  active: null, // { entryId, dateKey, startedAt, seconds, running, videoId, sessionId }
+  active: null, // { entryId, dateKey, startedAt, seconds, running, awaitingPlay, videoId, sessionId }
   _saveCounter: 0,
 
-  start(videoId, sessionId) {
+  /* awaitPlay=true：等待真实视频播放状态，本地事件与主进程子框架探测共用。 */
+  start(videoId, sessionId, opts) {
     if (!videoId) { toast('请先选择跟练视频', 'red'); return false; }
     if (this.active) {
       // 已有进行中的会话：切换视频归属继续计时
@@ -13,30 +14,78 @@ const Session = {
       toast('已切换到新视频，计时继续');
       return true;
     }
+    const awaitPlay = !!(opts && opts.awaitPlay);
     const entryId = uid('en');
     this.active = {
       entryId, dateKey: todayKey(), startedAt: Date.now(),
-      seconds: 0, running: true, videoId, sessionId: sessionId || null
+      seconds: 0, running: !awaitPlay, awaitingPlay: awaitPlay, videoId, sessionId: sessionId || null,
+      autoPausedBy: null,  // 自动暂停来源：'background'（切后台）| 'media'（视频暂停）| null
+      interruptions: 0     // 打断次数（手动暂停/视频暂停/切后台），仅后台记录与成就展示，跟练/今日界面零显示
     };
     Store.addTrainingEntry(todayKey(), {
       id: entryId, videoId, sessionId: sessionId || null,
-      start: hhmm(), seconds: 0, manual: false
+      start: hhmm(), seconds: 0, manual: false, interruptions: 0, source:'media-observed'
     });
+    return true;
+  },
+
+  /* 等待态 → 真正开始计时（仅由实际播放状态触发） */
+  beginCounting() {
+    const a = this.active;
+    if (!a || !a.awaitingPlay) return false;
+    a.awaitingPlay = false;
+    a.running = true;
+    toast('检测到视频播放，计时开始 ✓', 'green');
     return true;
   },
 
   togglePause() {
     if (!this.active) return;
+    if (this.active.running) this.active.interruptions = (this.active.interruptions || 0) + 1; // 暂停计打断，恢复不计
     this.active.running = !this.active.running;
+    /* 手动暂停/继续是最高优先级：清掉自动暂停标记，之后回到前台/视频恢复都不得自动续表 */
+    this.active.autoPausedBy = null;
     this._persist();
+  },
+
+  /* 自动暂停（切后台/视频暂停）：只作用于正在走计时的会话；手动暂停过的不受影响 */
+  autoPause(reason) {
+    const a = this.active;
+    if (!a || !a.running || a.awaitingPlay) return false;
+    a.running = false;
+    a.autoPausedBy = reason || 'media';
+    if (reason === 'user') a.interruptions = (a.interruptions || 0) + 1;
+    else a.technicalPauses = (a.technicalPauses || 0) + 1;
+    this._persist();
+    return true;
+  },
+
+  /* 自动恢复：只恢复「由自动暂停」停下的计时，且视频需确实在播（background 恢复时由调用方先确认或先播媒体） */
+  autoResume() {
+    const a = this.active;
+    if (!a || a.running || a.awaitingPlay || !a.autoPausedBy) return false;
+    a.running = true;
+    a.autoPausedBy = null;
+    this._persist();
+    return true;
   },
 
   stop() {
     if (!this.active) return null;
     const a = this.active;
-    this.active = null;
-    Store.updateTrainingEntry(a.dateKey, a.entryId, { seconds: a.seconds, end: hhmm() });
+    this.active = null; Store.db.activeFollow = null;
+    /* 等待态没计时就结束：移除 0 秒占位条目，不污染记录与视频统计 */
+    if (a.awaitingPlay && (a.seconds || 0) === 0) {
+      Store.removeTrainingEntry(a.dateKey, a.entryId);
+      Store.save(true);
+      return null;
+    }
+    /* 完播判定：有效计时 ≥ 80% 视频时长（且 ≥120s；无时长按 3 分钟）才计入完整跟练次数 */
+    const video = a.videoId ? Store.videoById(a.videoId) : null;
+    const { completed } = followCompletion(a.seconds, video ? video.durationSec : null);
+    Store.updateTrainingEntry(a.dateKey, a.entryId, { seconds: a.seconds, end: hhmm(), completed });
     Store.save(true);
+    if (completed) Views.checkBadgeUnlocks(); // 完整跟练可能解锁徽章，即时庆祝
     return a.seconds;
   },
 
@@ -47,12 +96,31 @@ const Session = {
       this._saveCounter++;
       if (this._saveCounter % 30 === 0) this._persist(); // 每 30 秒落盘，防崩溃丢数据
       Views.syncTimerUI($('#view-root'));
+      this._warnIfSuspicious();
+    }
+  },
+
+  /* 防呆：跟练计时是最容易「忘了停」的地方。
+     ① 单次会话每满 30 分钟推一条系统通知；
+     ② 窗口失焦（切后台/最小化）超过 2 分钟后，每 5 分钟提醒一次——
+        视频在应用内播放，切走基本等于没在练，但不停表（避免误伤），只提醒+事后可改。 */
+  _warnIfSuspicious() {
+    if (typeof native === 'undefined' || !native.notify) return;
+    const a = this.active;
+    const min = Math.floor(a.seconds / 60);
+    if (a.seconds % 1800 === 0 && min > 0) {
+      native.notify('⏱ 跟练计时进行中', `已计时 ${min} 分钟。练完了记得点「结束」；记多了也没关系，成就日历里每条记录都可以修改。`);
+      return;
+    }
+    if (App.hiddenSince && Date.now() - App.hiddenSince >= 120000 && a.seconds > 0 && a.seconds % 300 === 0) {
+      native.notify('⏱ 不在前台，计时仍在进行', '如果不是在跟练，回到应用点「结束」，时长可在成就日历里修改。');
     }
   },
 
   _persist() {
     const a = this.active;
-    if (a) Store.updateTrainingEntry(a.dateKey, a.entryId, { seconds: a.seconds });
+    Store.db.activeFollow = a ? {...a,running:false} : null;
+    if (a) Store.updateTrainingEntry(a.dateKey, a.entryId, { seconds: a.seconds, interruptions: a.interruptions || 0, technicalPauses: a.technicalPauses || 0, source:'media-observed' });
   }
 };
 
@@ -63,6 +131,10 @@ const App = {
   async boot() {
     await Store.init();
     Strength.boot();
+    /* 夜间模式：按上次选择恢复 */
+    document.documentElement.classList.toggle('dark', !!Store.db.settings.darkMode);
+    /* 启动时把已解锁徽章登记为「已见」，之后新解锁才会触发庆祝 */
+    try { Views.checkBadgeUnlocks(); } catch {}
     if (window.native.isMac) document.body.classList.add('is-mac');
 
     // 导航
@@ -71,23 +143,48 @@ const App = {
     });
 
     // 主进程通知点击 → 确认弹窗 → 开始跟练
-    window.native.onReminderActivate(({ sessionId }) => this.onReminded(sessionId));
+    window.native.onReminderActivate(({ sessionId }) => sessionId ? this.onReminded(sessionId) : UX.reminders());
 
-    // 全局计时
+    // 跟练计时。力量训练不走秒。
     setInterval(() => Session.tick(), 1000);
-    setInterval(() => Strength.tick(), 1000);
 
-    // 侧栏不显示时钟；日期读取、训练计时及主进程定时提醒照常运行。
+    // 侧栏不显示时钟；日期读取、跟练计时及主进程定时提醒照常运行。
     // 状态胶囊每 30 秒刷新
-    setInterval(() => { this.refreshStatusPill(); this.updateMiniBar(); }, 30000);
+    setInterval(() => {
+      this.refreshStatusPill();
+      this.updateMiniBar();
+      /* 跨午夜自动重渲今日页：简报/日期/预测不残留昨天（有弹窗或进行中会话时跳过，防打断操作） */
+      if (this.currentView === 'today' && !Session.active && todayKey() !== this._renderedDay) {
+        const mask = document.querySelector('#modal-mask');
+        if (!mask || mask.classList.contains('hidden')) this.render();
+      }
+    }, 30000);
+
+    // 媒体-计时同步：切后台自动暂停 + 视频暂停/恢复联动（详见 pollMediaSync）
+    const onHidden = () => this._onHidden();
+    const onVisible = () => this._onVisible();
+    // Native window blur is used instead: clicking a cross-origin iframe also blurs window.
+    document.addEventListener('visibilitychange', () => { document.hidden ? onHidden() : onVisible(); });
+    /* 主进程兜底：最小化/隐藏到托盘不触发 DOM blur/visibility 事件 */
+    if (window.native && window.native.onAppVisibility) {
+      window.native.onAppVisibility(({ hidden }) => { hidden ? onHidden() : onVisible(); });
+    }
+    setInterval(() => { this.pollMediaSync(); }, 250);
 
     // 退出前落盘
     window.addEventListener('beforeunload', () => Store.flushSync());
+    /* 失焦追踪：供跟练防呆提醒判断「切后台多久了」 */
+    window.addEventListener('blur', () => { this.hiddenSince = Date.now(); });
+    window.addEventListener('focus', () => { this.hiddenSince = null; });
+
 
     this.render();
   },
 
   go(view) {
+    if (this.currentView === 'follow' && view !== 'follow') {
+      Bilibili.MediaSync.pauseAll(); Session.autoPause('media');
+    }
     this.currentView = view;
     $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
     $('#page-title').textContent = Views.titles[view] || view;
@@ -96,21 +193,35 @@ const App = {
 
   render() {
     const root = $('#view-root');
+    if (!root) return;
     const v = this.currentView;
     /* 动效分级：切栏目播完整入场（虚化揭示+卡片错峰），页内重绘只播轻量刷新，
        避免打卡/保存/翻页每次都整页模糊 0.5 秒 */
     const viewChanged = this._renderedView !== v;
     this._renderedView = v;
+    this._renderedDay = todayKey();
     root.classList.remove('view-enter', 'view-update');
     void root.offsetWidth; // 强制回流，让同类动画也能重播（如 A→B→A 再点回来）
     root.classList.add(viewChanged ? 'view-enter' : 'view-update');
-    if (v === 'today') Views.today(root);
-    else if (v === 'follow') Views.follow(root);
-    else if (v === 'plan') Views.plan(root);
-    else if (v === 'strength') Strength.view(root);
-    else if (v === 'skincare') Skincare.view(root);
-    else if (v === 'nutrition') Rhythm.view(root);
-    else if (v === 'achievements') Views.achievements(root);
+    /* 切栏目先清空：任一视图中途抛错时，绝不能把上一领域的界面留在新栏目里 */
+    if (viewChanged) {
+      root.replaceChildren();
+      root.scrollTop = 0;
+    }
+    try {
+      if (v === 'today') Views.today(root);
+      else if (v === 'follow') Views.follow(root);
+      else if (v === 'settings') UX.settings(root);
+      else if (v === 'membership') Membership.view(root);
+      else if (v === 'plan') Views.plan(root);
+      else if (v === 'strength') Strength.view(root);
+      else if (v === 'skincare') Skincare.view(root);
+      else if (v === 'nutrition') Rhythm.view(root);
+      else if (v === 'achievements') Views.achievements(root);
+    } catch (err) {
+      console.error('[render]', v, err);
+      root.innerHTML = `<div class="view"><div class="card"><h3>这一页没能打开</h3><p class="hint">再点一次侧栏试试。如果一直如此，告诉我是「${esc(Views.titles[v] || v)}」这一栏。</p></div></div>`;
+    }
     this.refreshStatusPill();
     this.updateMiniBar();
   },
@@ -118,6 +229,11 @@ const App = {
   refreshStatusPill() {
     const pill = $('#today-status-pill');
     if (!pill) return;
+    if (this.currentView === 'strength') {
+      pill.className = 'pill hidden';
+      pill.textContent = '';
+      return;
+    }
     const day = Store.dayTraining(todayKey());
     const target = Store.settings().dailyTargetMinutes || 15;
     const min = Math.round(day.seconds / 60);
@@ -134,11 +250,15 @@ const App = {
   updateMiniBar() {
     const bar = $('#mini-session-bar');
     if (!bar) return;
-    if (Session.active && this.currentView !== 'follow') {
+    if (Session.active && this.currentView !== 'follow' && this.currentView !== 'strength') {
       bar.classList.remove('hidden');
       document.body.classList.add('has-minibar'); // 内容区让位，避免遮挡底部按钮
       $('#mini-session-time').textContent = fmtSeconds(Session.active.seconds);
-      $('#mini-session-label').textContent = Session.active.running ? '跟练计时中' : '计时已暂停';
+      $('#mini-session-label').textContent = Session.active.awaitingPlay ? '等待视频播放'
+        : Session.active.running ? '跟练计时中'
+        : Session.active.autoPausedBy === 'background' ? '已自动暂停（回到应用继续）'
+        : Session.active.autoPausedBy === 'media' ? '已自动暂停（视频暂停）'
+        : '计时已暂停';
     } else {
       bar.classList.add('hidden');
       document.body.classList.remove('has-minibar');
@@ -146,16 +266,15 @@ const App = {
   },
 
   /* 直接进入跟练（选定视频后的一跳） */
-  launchFollow(videoId, sessionId) {
+  launchFollow(videoId, sessionId, opts) {
+    const video=Store.videoById(videoId); if(video)video.lastUsedAt=new Date().toISOString();
+    if (Session.active && Session.active.videoId !== videoId) Session.stop();
     this.followVideoId = videoId;
+    // Only an explicit click on the home video frame requests immediate playback.
+    this.followAutoplay = opts?.autoplay === true;
     this.go('follow');
-    setTimeout(() => {
-      const stage = $('#stage');
-      if (stage) Views.loadStage(stage, Store.videoById(videoId));
-      if (!Session.active) Session.start(videoId, sessionId);
-      else { Session.active.videoId = videoId; if (sessionId) Session.active.sessionId = sessionId; }
-      Views.syncTimerUI($('#view-root'));
-    }, 50);
+    if (Session.active && sessionId) Session.active.sessionId = sessionId;
+    Views.syncTimerUI($('#view-root'));
   },
 
   /* 「今天练什么操」选择界面：点跟练先来这里，选好再进跟练 */
@@ -171,7 +290,7 @@ const App = {
       <p class="hint">${sess ? `为「${esc(sess.name)}」选一个跟练视频，选定后自动绑定，以后到点直达。` : '从下面选一个开始，或者先导入新视频。'}</p>
       ${bound ? `
         <div class="row chooser-direct">
-          <img class="t-thumb" src="${bound.source === 'bilibili' && bound.pic ? esc(bound.pic) : ''}" referrerpolicy="no-referrer" onerror="this.classList.add('ph')">
+          <img class="t-thumb" src="${bound.source === 'bilibili' && bound.pic ? esc(bound.pic) : ''}" referrerpolicy="no-referrer">
           <div style="flex:1"><b>已绑定：${esc(bound.title)}</b><div class="hint">上次为该安排选的视频</div></div>
           <button class="btn primary" id="ch-direct">▶ 直接开始</button>
         </div><hr class="sep">` : ''}
@@ -183,7 +302,7 @@ const App = {
             return `<div class="today-item ch-session" data-sid="${t.id}" style="cursor:pointer; ${sess && t.id === sess.id ? 'border-color:var(--accent);' : ''}">
               <div class="t-time">${esc(t.time)}</div>
               <div class="t-name"><b>${esc(t.name)}</b><span>${tv ? esc(tv.title) : '未绑定 · 从下方选视频'}</span></div>
-              ${tv ? `<img class="t-thumb" src="${tv.source === 'bilibili' && tv.pic ? esc(tv.pic) : ''}" referrerpolicy="no-referrer" onerror="this.classList.add('ph')">` : `<div class="t-thumb ph">＋</div>`}
+              ${tv ? `<img class="t-thumb" src="${tv.source === 'bilibili' && tv.pic ? esc(tv.pic) : ''}" referrerpolicy="no-referrer">` : `<div class="t-thumb ph">＋</div>`}
             </div>`;
           }).join('')}
         </div>` : ''}
@@ -191,7 +310,7 @@ const App = {
       <div class="ch-grid" id="ch-videos">
         ${videos.length ? videos.map(v => `
           <div class="vid-card ch-vid" data-vid="${v.id}">
-            ${v.source === 'bilibili' && v.pic ? `<img class="vid-cover" src="${esc(v.pic)}" referrerpolicy="no-referrer" onerror="this.classList.add('ph')">` : `<div class="vid-cover ph">🎞️</div>`}
+            ${v.source === 'bilibili' && v.pic ? `<img class="vid-cover" src="${esc(v.pic)}" referrerpolicy="no-referrer">` : `<div class="vid-cover ph">🎞️</div>`}
             <div class="vid-info"><div class="vid-title">${esc(v.title)}</div>
             <div class="vid-meta"><span>${v.source === 'bilibili' ? 'B站' : '本地'}${v.durationSec ? ' · ' + Math.round(v.durationSec / 60) + '分钟' : ''}</span></div></div>
           </div>`).join('') : '<div class="empty" style="grid-column:1/-1">视频库是空的，先用下面任一方式导入。</div>'}
@@ -206,7 +325,8 @@ const App = {
 
     const pick = (v) => {
       if (!v) return;
-      if (sess && (!sess.videoId || sess.videoId === v.id)) { sess.videoId = v.id; Store.save(true); }
+      /* 显式选定的视频无条件绑定该安排——与弹窗「以后到点直达」的承诺一致 */
+      if (sess) { sess.videoId = v.id; Store.save(true); }
       closeModal();
       this.launchFollow(v.id, sess ? sess.id : null);
     };
@@ -229,12 +349,14 @@ const App = {
       if (!text) { toast('先粘贴链接或 BV 号', 'red'); return; }
       const p = Bilibili.parse(text);
       if (!p) { toast('没识别出视频，检查一下链接', 'red'); return; }
-      let v = Store.db.videos.find(x => x.bvid === p.bvid || (p.aid && x.aid === p.aid));
+      let v = Store.db.videos.find(x => ((p.bvid && x.bvid === p.bvid) || (p.aid && x.aid === p.aid)) && (x.page||1)===p.page);
       if (!v) {
         toast('正在获取视频信息…');
         const info = await window.native.fetchBilibiliInfo(p.bvid || ('av' + p.aid));
+        if(!info?.ok){toast('资料获取失败：'+(info?.error||'请重试'),'red');return;}
+        const part=info.pages?.find(x=>x.page===p.page);if(p.page>1&&!part){toast('该分 P 不存在','red');return;}
         v = {
-          id: uid('vid'), source: 'bilibili',
+          id: uid('vid'), source: 'bilibili', cid:part?.cid||info.cid,playbackVerified:false,
           bvid: p.bvid || null, aid: p.aid || null, page: p.page || 1,
           title: (info && info.ok) ? info.title : (p.bvid || 'av' + p.aid),
           pic: (info && info.ok) ? info.pic : '',
@@ -260,6 +382,68 @@ const App = {
   /* 兼容旧调用：点击「跟练」→ 打开选择界面 */
   startSessionFor(sess) {
     this.openPracticeChooser(sess);
+  },
+
+  /* ---------- 媒体-计时同步 ---------- */
+
+  /* 切后台（blur/隐藏/最小化，可能连环触发，用 _bgHandled 去重）：
+     设置开启时（autoPauseOnBlur !== false）暂停计时+视频；关闭时维持旧行为（不停表，仅防呆通知） */
+  _onHidden() {
+    this.hiddenSince = this.hiddenSince || Date.now();
+    if (this._bgHandled) return;
+    this._bgHandled = true;
+    if (!Session.active || Session.active.awaitingPlay) return;
+    if (Store.db.settings.autoPauseOnBlur === false) return; // 用户关闭了自动暂停
+    this._autoPausedMedia = true;
+    try { Bilibili.MediaSync.pauseAll(); } catch (e) {}
+    Session.autoPause('background');
+    Views.syncTimerUI($('#view-root'));
+  },
+
+  /* 回前台：恢复由切后台自动暂停的计时与视频；手动暂停过的不动 */
+  _onVisible() {
+    this.hiddenSince = null;
+    this._bgHandled = false;
+    if (!Session.active || Session.active.awaitingPlay) return;
+    if (Session.active.autoPausedBy === 'background') {
+      if (this._autoPausedMedia) {
+        this._autoPausedMedia = false;
+        try { Bilibili.MediaSync.playAll(); } catch (e) {}
+      }
+      Views.syncTimerUI($('#view-root'));
+    }
+  },
+
+  /* 每 250 毫秒轮询视频状态（渲染端能感知到的范围内）：
+     ① 等待态探测到视频在播 → 自动开始计时（本地视频此前已由 play 事件联动，这里是 B 站兜底）
+     ② 计时中视频被暂停（用户在播放器里按了空格等）→ 计时同步暂停
+     ③ 计时被自动暂停后视频恢复播放 → 计时同步继续
+     状态不可知（null）不计时。 */
+  async pollMediaSync() {
+    if (this._mediaProbeBusy || !Session.active || this.currentView !== 'follow') return;
+    this._mediaProbeBusy = true;
+    const active = Session.active, stage = document.querySelector('#stage')?.firstElementChild;
+    const epoch = this._mediaEpoch;
+    try {
+      const playing = await Bilibili.MediaSync.probePlaying();
+      if (Session.active !== active || this.currentView !== 'follow' ||
+          document.querySelector('#stage')?.firstElementChild !== stage || epoch !== this._mediaEpoch) return;
+      const state = Bilibili.MediaSync.lastState;
+      if(state && Number.isFinite(state.currentTime)) {active.mediaPosition=state.currentTime;const v=Store.videoById(active.videoId);if(v)v.playbackVerified=true;}
+      active.mediaStatus=state?.seeking?'跳转中':state&&state.readyState<3?'缓冲中':playing===true?'计时中':playing===null?'播放器状态不可读取':'暂停';
+      this.applyMediaState(playing === true);
+    } finally { this._mediaProbeBusy = false; }
+  },
+
+  applyMediaState(playing) {
+    const a = Session.active;
+    if (!a) return;
+    // An unknown/disconnected player never earns training time.
+    if (playing && !(this._bgHandled && Store.db.settings.autoPauseOnBlur !== false)) {
+      if (a.awaitingPlay) Session.beginCounting();
+      else { a.running = true; a.autoPausedBy = null; }
+    } else if (a.running) Session.autoPause('media');
+    Views.syncTimerUI($('#view-root'));
   },
 
   /* 收到提醒（系统通知点击或托盘） */

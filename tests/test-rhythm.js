@@ -119,3 +119,55 @@ test('band duration is preferred, bounded by the interval, and optional for old 
   assert.ok(R.validateSleep(R.sleepInput('2026-09-12','23:00','07:00',0), R.normalize(), +now));
   assert.equal(R.validateSleep(R.sleepInput('2026-09-12','23:00','07:00',405), R.normalize(), +now), null);
 });
+test('awake minutes are subtracted from the interval and take precedence over recorded minutes', () => {
+  const base = sleep('2026-09-11T23:00', '2026-09-12T07:00'); // 跨度 480
+  assert.equal(R.sleepMinutes({ ...base, awakeMinutes: 30 }), 450);
+  assert.equal(R.sleepMinutes({ ...base, awakeMinutes: 0 }), 480);
+  // 清醒时间优先于旧手环时长：两者同时存在时不双重扣减
+  assert.equal(R.sleepMinutes({ ...base, awakeMinutes: 30, recordedMinutes: 405 }), 450);
+  // 未填清醒时间时旧口径不变
+  assert.equal(R.sleepMinutes({ ...base, recordedMinutes: 405 }), 405);
+  // 校验：负数 / 非整数 / 不小于跨度 → 拒绝；合法值通过
+  const data = R.normalize();
+  assert.ok(R.validateSleep(R.sleepInput('2026-09-12','23:00','07:00',null,null,-5), data, +now));
+  assert.ok(R.validateSleep(R.sleepInput('2026-09-12','23:00','07:00',null,null,480), data, +now));
+  assert.ok(R.validateSleep(R.sleepInput('2026-09-12','23:00','07:00',null,null,30.5), data, +now));
+  assert.equal(R.validateSleep(R.sleepInput('2026-09-12','23:00','07:00',null,null,30), data, +now), null);
+});
+
+test('sleepAdvice：昨日训练容量高 → 今晚多留 15 分钟恢复窗口（2026-09-22 N2）', () => {
+  const now = new Date('2026-09-22T09:00:00+08:00');
+  const mkData = () => {
+    const sleeps = [];
+    for (let i = 0; i < 7; i++) {
+      const day = String(15 + i).padStart(2, '0');
+      const next = String(16 + i).padStart(2, '0');
+      const startLocal = '2026-09-' + day + 'T23:00';
+      const endLocal = '2026-09-' + next + 'T07:00';
+      sleeps.push({ kind: 'main', startLocal, endLocal, start: startLocal + ':00', end: endLocal + ':00' });
+    }
+    return { sleeps, meals: [] };
+  };
+  const base = R.sleepAdvice(mkData(), now, {});
+  const boosted = R.sleepAdvice(mkData(), now, { trainingSetsYesterday: 18 });
+  assert.equal(boosted.opportunityMinutes, base.opportunityMinutes + 15);
+  assert.ok(boosted.reasons.some((r) => r.includes('恢复窗口')), 'reasons 应说明恢复窗口');
+  /* 容量不足 15 组 → 不加 */
+  const light = R.sleepAdvice(mkData(), now, { trainingSetsYesterday: 10 });
+  assert.equal(light.opportunityMinutes, base.opportunityMinutes);
+  /* options=null → 不炸（向后兼容加固） */
+  assert.equal(R.sleepAdvice(mkData(), now, null).opportunityMinutes, base.opportunityMinutes);
+});
+
+test('glycemicScore：tomorrowActions 只对今天记录到的具体习惯给行动（2026-09-22 N4）', () => {
+  const mk = (tier, firstAt, lastAt) => ({ sugarLog: { '2026-09-22': tier }, meals: [
+    { local: '2026-09-22T' + firstAt }, { local: '2026-09-22T' + lastAt }
+  ] });
+  const bad = R.glycemicScore(mk(2, '08:00', '23:30'), '2026-09-22');
+  assert.ok(bad.tomorrowActions.length >= 1, '甜食档偏多+跨度超12h+末餐晚 → 至少一条行动');
+  assert.ok(bad.tomorrowActions.some((a) => a.includes('甜食')));
+  const good = R.glycemicScore(mk(0, '09:00', '19:00'), '2026-09-22');
+  assert.equal(good.tomorrowActions.length, 0, '全部达标 → 无行动项');
+  /* 分数本身不受影响（tomorrowActions 是附加字段） */
+  assert.equal(bad.score, R.glycemicScore(mk(2, '08:00', '23:30'), '2026-09-22').score);
+});

@@ -29,7 +29,7 @@ function planInput(overrides) {
   }, overrides);
 }
 
-test('业务日期按 Asia/Shanghai 归日', () => {
+test('业务日期按本地时区归日（与全应用口径一致；UTC+8 下即上海日期）', () => {
   assert.equal(Core.businessDate(new Date('2026-09-12T15:59:00Z')), '2026-09-12'); // 23:59 上海
   assert.equal(Core.businessDate(new Date('2026-09-12T16:01:00Z')), '2026-09-13'); // 次日 00:01 上海
   assert.ok(Core.isBusinessDate('2026-02-29') === false);
@@ -44,6 +44,18 @@ test('normalize 幂等初始化，兼容旧数据', () => {
   const s2 = Core.normalize({ strength: old });
   assert.equal(s2.templates.length, 1);
   assert.deepEqual(Object.keys(s2).sort(), ['cycle', 'days', 'events', 'progress', 'templates']);
+});
+
+test('normalize 保留 bmiProfile（修复跨页面渲染抹除身体档案），垃圾键仍不收', () => {
+  const db = { strength: { templates: [], cycle: {}, days: {}, events: [], progress: [], bmiProfile: { heightCm: 160, weightKg: 50, age: 26, sex: '女' }, junk: 1 } };
+  const once = Core.normalize(db);
+  assert.deepEqual(once.bmiProfile, { heightCm: 160, weightKg: 50, age: 26, sex: '女' });
+  assert.equal(once.junk, undefined);
+  const twice = Core.normalize(db); // 幂等：二次归一不得丢失
+  assert.deepEqual(twice.bmiProfile, { heightCm: 160, weightKg: 50, age: 26, sex: '女' });
+  // 空库仍不引入 bmiProfile 键（既有键集断言保持成立）
+  const fresh = Core.normalize({});
+  assert.equal('bmiProfile' in fresh, false);
 });
 
 test('replaceTemplate：新建是第 1 版，再次替换产生第 2 版且旧版本保留', () => {
@@ -163,6 +175,42 @@ test('select-cycle-day 手动指定轮转指针', () => {
   assert.equal(bad.ok, false);
 });
 
+test('assign-training-day：预览日换训练日；进行中换模板会改动作并保留计时；已收尾拒绝', () => {
+  const state = Core.normalize({});
+  const a = pushPlan(state, planInput().days, NOW);
+  const b = Core.replaceTemplate(state, {
+    name: '练三腹一',
+    days: [
+      { dayKey: 'chest', name: '第一天 · 胸＋三头', actions: [{ name: '哑铃卧推', plannedSets: 4, plannedRepsText: '10' }] }
+    ]
+  }, new Date(NOW.getTime() + 1000)).template;
+  /* 预览：今天还没开始，换到练三腹一的胸日 */
+  const T2 = new Date(NOW.getTime() + 5000);
+  const preview = Core.todayPlan(state, '2026-09-12');
+  assert.equal(preview.preview, true);
+  const sw = Core.assignTrainingDay(state, { date: '2026-09-12', templateId: b.id, dayKey: 'chest' }, T2);
+  assert.ok(sw.ok && sw.preview, sw.error);
+  const after = Core.todayPlan(state, '2026-09-12');
+  assert.equal(after.day.templateId, b.id);
+  assert.equal(after.day.dayKey, 'chest');
+  assert.equal(after.templateName, '练三腹一');
+  /* 开始后换成另一份模板的拉日：动作变、秒数保留 */
+  assert.ok(Core.startTraining(state, { date: '2026-09-12' }, T2).ok);
+  state.days['2026-09-12'].totalSeconds = 90;
+  state.days['2026-09-12'].actions[0].setsDone = 2;
+  const mid = Core.assignTrainingDay(state, { date: '2026-09-12', templateId: a.id, dayKey: 'pull' }, new Date(T2.getTime() + 1000));
+  assert.ok(mid.ok, mid.error);
+  assert.equal(state.days['2026-09-12'].dayKey, 'pull');
+  assert.equal(state.days['2026-09-12'].name, '拉日');
+  assert.equal(state.days['2026-09-12'].totalSeconds, 90);
+  assert.equal(state.days['2026-09-12'].actions[0].name, '引体向上');
+  assert.equal(state.days['2026-09-12'].actions[0].setsDone, null);
+  /* 收尾后不能换 */
+  assert.ok(Core.finishAndAdvance(state, { date: '2026-09-12' }, NOW).ok);
+  const locked = Core.assignTrainingDay(state, { date: '2026-09-12', templateId: b.id, dayKey: 'chest' }, NOW);
+  assert.equal(locked.ok, false);
+});
+
 test('进步对比：与上一次实际数据的差值', () => {
   const state = Core.normalize({});
   pushPlan(state, planInput().days, NOW);
@@ -233,4 +281,167 @@ test('todayPlan 预览不落库，开始后才生成记录', () => {
   Core.startTraining(state, { date: '2026-09-12' }, NOW);
   assert.equal(Object.keys(state.days).length, 1);
   assert.equal(Core.todayPlan(state, '2026-09-12').preview, false);
+});
+
+test('身体基础指标：BMI/中国分类/健康体重范围/BMR/TDEE', () => {
+  assert.equal(Core.bmi(170, 65), 22.5);
+  assert.equal(Core.bmi(0, 65), null);
+  assert.equal(Core.bmi(300, 65), null);
+  assert.equal(Core.bmiCategoryCN(22.5), '正常');
+  assert.equal(Core.bmiCategoryCN(17), '偏低');
+  assert.equal(Core.bmiCategoryCN(25), '超重');
+  assert.equal(Core.bmiCategoryCN(29), '肥胖');
+  assert.deepEqual(Core.healthyWeightRange(170), { min: 53, max: 69 });
+  /* Mifflin-St Jeor：男 70kg/175cm/30岁 → 10*70+6.25*175-5*30+5 = 1649 */
+  assert.equal(Core.bmrMifflin('男', 70, 175, 30), 1649);
+  assert.equal(Core.bmrMifflin('女', 60, 160, 28), 1299);
+  assert.equal(Core.bmrMifflin('男', 70, 175, 5), null);
+  const bmr = Core.bmrMifflin('男', 70, 175, 30);
+  assert.equal(Core.tdee(bmr, 'moderate'), Math.round(1649 * 1.55));
+  assert.equal(Core.tdee(bmr, 'unknown'), null);
+});
+
+test('skip-and-advance：不练原因持久化到收尾决议', () => {
+  const state = Core.normalize({});
+  pushPlan(state, planInput().days, NOW);
+  Core.startTraining(state, { date: '2026-09-12' }, NOW);
+  const r = Core.skipAndAdvance(state, { date: '2026-09-12', note: '熬夜主动休息' }, NOW);
+  assert.ok(r.ok, r.error);
+  const day = Core.dayRecord(state, '2026-09-12');
+  assert.equal(day.status, 'skipped');
+  assert.equal(day.resolution.note, '熬夜主动休息');
+});
+
+test('逐组记录兜底：汇总缺失时统计以已完成组为准（观测/容量/趋势/上次/肌群）', () => {
+  const state = Core.normalize({});
+  const now = new Date('2026-09-12T02:00:00.000Z');
+  pushPlan(state, [
+    { dayKey: 'd1', name: '推日', actions: [{ name: '卧推', plannedSets: 3, plannedRepsText: '10' }] }
+  ], now);
+  Core.startTraining(state, { date: '2026-09-10' }, now);
+  Core.saveTraining(state, { date: '2026-09-10', actions: [{ actionKey: 'act-1-1', sets: [
+    { reps: 10, weightKg: 60, done: true },
+    { reps: 10, weightKg: 60, done: true },
+    { reps: 8, weightKg: 55, done: true },
+    { reps: 8, weightKg: 55, done: false }
+  ] }] }, now);
+  /* 模拟只有逐组事实、汇总字段缺失的旧数据/导入数据 */
+  const act = state.days['2026-09-10'].actions[0];
+  act.setsDone = null; act.repsText = ''; act.weightKg = null;
+
+  const obs = Core.collectObservations(state, '2026-09-12');
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].sets, 3);
+
+  const vol = Core.volumeOf(state.days['2026-09-10']);
+  assert.equal(vol.sets, 3);
+  assert.equal(vol.volume, 1640); /* 60×10 + 60×10 + 55×8；未完成组不计 */
+
+  const sum = Core.statsSummary(state, '2026-09-12', 7);
+  assert.equal(sum.sets, 3);
+  assert.equal(sum.volume, 1640);
+
+  const snap = Core.trendsSnapshot(state, '2026-09-12', 4);
+  assert.equal(snap.recentSessions[0].sets, 3);
+
+  const last = Core.lastActual(state, '卧推', '2026-09-12');
+  assert.ok(last && last.date === '2026-09-10');
+
+  const muscle = Core.muscleProgress(state, '2026-09-12').find((m) => m.key === 'chest');
+  assert.equal(muscle.recentSets, 3);
+});
+
+test('导入 round-trip 保留 bmiProfile（导出→粘回恢复不丢身体档案）', () => {
+  const state = Core.normalize({});
+  state.bmiProfile = { heightCm: 170, weightKg: 65, age: 30, sex: '男' };
+  const tpl = Core.replaceTemplate(state, { name: 'T', days: [
+    { dayKey: 'd1', name: '日1', actions: [{ name: '深蹲', plannedSets: 3, plannedRepsText: '8' }] }
+  ] });
+  assert.ok(tpl.ok);
+  const exported = JSON.parse(JSON.stringify(state));
+  assert.ok(exported.bmiProfile, '导出应含身体档案');
+  const fresh = Core.normalize({});
+  const r = Core.importFrom(fresh, exported);
+  assert.ok(r.ok, r.error || '导入失败');
+  assert.deepEqual(fresh.bmiProfile, { heightCm: 170, weightKg: 65, age: 30, sex: '男' });
+});
+
+/* ---------- 负重输入解析：数字与「自重」文本进同一套记录机制 ---------- */
+test('parseWeightInput：留空=没记(null)，数字原样，自重同义词折算成 0', () => {
+  assert.deepEqual(Core.parseWeightInput(''), { ok: true, value: null });
+  assert.deepEqual(Core.parseWeightInput('   '), { ok: true, value: null });
+  assert.deepEqual(Core.parseWeightInput(null), { ok: true, value: null });
+  assert.deepEqual(Core.parseWeightInput('20'), { ok: true, value: 20 });
+  assert.deepEqual(Core.parseWeightInput('13.5'), { ok: true, value: 13.5 });
+  assert.deepEqual(Core.parseWeightInput('0'), { ok: true, value: 0 });
+  assert.deepEqual(Core.parseWeightInput('20kg'), { ok: true, value: 20 });
+  assert.deepEqual(Core.parseWeightInput('20 kg'), { ok: true, value: 20 });
+  assert.deepEqual(Core.parseWeightInput('7.5公斤'), { ok: true, value: 7.5 });
+});
+
+test('parseWeightInput：「自重 / 徒手 / BW」等写法都记为明确自重（0），全角数字也能进', () => {
+  for (const text of ['自重', ' 自重 ', '自重训练', '徒手', '裸重', 'bw', 'BW', 'bodyweight', 'body weight', '体重']) {
+    assert.deepEqual(Core.parseWeightInput(text), { ok: true, value: 0 }, text);
+  }
+  assert.deepEqual(Core.parseWeightInput('２０'), { ok: true, value: 20 }); // 全角输入法
+  assert.deepEqual(Core.parseWeightInput('１２．５'), { ok: true, value: 12.5 });
+});
+
+test('parseWeightInput：无法识别的写法报错并给出填法，不静默当成没记', () => {
+  for (const text of ['轻重量', 'abc', '12-15', '-5', '12.5.5']) {
+    const r = Core.parseWeightInput(text);
+    assert.equal(r.ok, false, text);
+    assert.match(r.error, /自重/);
+    assert.equal(r.value, undefined);
+  }
+  assert.equal(Core.parseWeightInput('3000').ok, false); // 超过 2000kg 上限
+  for (const text of ['自重20', '自重 20kg', '体重60', '20bw', 'bodyweight12.5']) {
+    const mixed = Core.parseWeightInput(text);
+    assert.equal(mixed.ok, false, text);
+    assert.match(mixed.error, /自重/);
+    assert.equal(mixed.value, undefined);
+  }
+});
+
+test('weightLabelKg：0 显示「自重」，未记录返回空串，数字带 kg', () => {
+  assert.equal(Core.weightLabelKg(0), '自重');
+  assert.equal(Core.weightLabelKg(null), '');
+  assert.equal(Core.weightLabelKg(undefined), '');
+  assert.equal(Core.weightLabelKg(12), '12kg');
+  assert.equal(Core.weightLabelKg(13.5), '13.5kg');
+});
+
+test('自重记 0 后不产生负重容量，与留空一样只计次数', () => {
+  const bw = Core.summarizeTrainingSet(4, '15', Core.weightLabelKg(0));
+  assert.equal(bw.loadVolumeKg, null);
+  assert.equal(bw.averageWeightKg, null);
+  assert.equal(bw.totalReps, 60);
+  const loaded = Core.summarizeTrainingSet(4, '10', Core.weightLabelKg(20));
+  assert.equal(loaded.loadVolumeKg, 800);
+});
+
+/* ---------- 留空口径：练了这一行就把留空当自重，整行没动仍算没记 ---------- */
+test('resolveWeightInput：有完成组数/次数时留空记 0，整行没动记 null', () => {
+  assert.deepEqual(Core.resolveWeightInput('', true), { ok: true, value: 0 });      // 练了没填重量 → 自重
+  assert.deepEqual(Core.resolveWeightInput('', false), { ok: true, value: null });  // 没练 → 没记
+  assert.deepEqual(Core.resolveWeightInput('  ', true), { ok: true, value: 0 });
+  assert.deepEqual(Core.resolveWeightInput('自重', false), { ok: true, value: 0 }); // 明确写了就照写
+  assert.deepEqual(Core.resolveWeightInput('20', true), { ok: true, value: 20 });
+  assert.deepEqual(Core.resolveWeightInput('20kg', false), { ok: true, value: 20 });
+  assert.equal(Core.resolveWeightInput('轻重量', true).ok, false); // 认不出也不猜，报错
+});
+
+test('只填负重没填组数次数：不生成观测记录（留空记 0 后重量不再能证明记过）', () => {
+  const state = Core.normalize({});
+  Core.replaceTemplate(state, { name: 'T', days: [
+    { dayKey: 'd', name: '日', actions: [{ name: '俯卧撑', plannedSets: 4, plannedRepsText: '15-20' }] }
+  ] }, NOW);
+  Core.startTraining(state, { date: '2026-09-10' }, NOW);
+  Core.saveTraining(state, { date: '2026-09-10', actions: [{ actionKey: 'act-1-1', setsDone: null, repsText: '', weightKg: 0 }] }, NOW);
+  assert.deepEqual(Core.collectObservations(state, '2026-09-12'), []);
+  Core.saveTraining(state, { date: '2026-09-10', actions: [{ actionKey: 'act-1-1', setsDone: 4, repsText: '20', weightKg: 0 }] }, NOW);
+  const obs = Core.collectObservations(state, '2026-09-12');
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].weightText, '自重');
+  assert.equal(obs[0].sets, 4);
 });

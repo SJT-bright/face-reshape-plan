@@ -50,11 +50,14 @@ async function main() {
   console.log('已备份 →', path.relative(ROOT, bak));
 
   const work = fs.mkdtempSync('/tmp/face-reshape-deploy-');
+  const staged = path.join(ROOT, 'backups', `app.asar.next-${stamp}`);
   try {
     for (const name of SYNC) copy(path.join(ROOT, name), path.join(work, name), `${name}/`);
-    /* createPackage 是异步的：必须等打包写完再清理临时目录/签名，否则 crawl 会 lstat 到已删除的文件 */
-    await asar.createPackage(work, ASAR);
-    console.log('已打包 →', ASAR);
+    /* 先打到工作区再替换：createPackage 直接写正在运行的 asar 会失败或留下半包 */
+    await asar.createPackage(work, staged);
+    console.log('已打包 →', path.relative(ROOT, staged));
+    fs.copyFileSync(staged, ASAR);
+    console.log('已替换 →', ASAR);
   } finally {
     fs.rmSync(work, { recursive: true, force: true });
   }
@@ -63,4 +66,10 @@ async function main() {
   console.log('已 ad-hoc 重签');
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  if (e && e.code === 'EPERM') {
+    console.error('macOS 拒绝写入该 .app（常见于未授予「App 管理」权限，或应用仍在运行）。请先完全退出应用，在本机「终端」再跑一次本脚本。');
+  }
+  process.exit(1);
+});

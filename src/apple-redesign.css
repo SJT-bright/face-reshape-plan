@@ -22,13 +22,16 @@
   --ease-out: cubic-bezier(.16, 1, .3, 1);
   --img-bg: url('assets/img/optical-sculpture-bg.png');
   --img-sidebar: none;
+  --app-font: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
 }
 
 ::selection { background: rgba(127, 115, 230, .23); color: #101827; }
 :focus-visible { outline: 3px solid rgba(89, 111, 229, .5); outline-offset: 3px; }
 
+html, body, button, input, textarea, select, option {
+  font-family: var(--app-font);
+}
 body {
-  font-family: "HarmonyOS Sans SC", "MiSans", "Noto Sans SC", "PingFang SC", sans-serif;
   background: #e9f0f8;
   color: var(--text);
   letter-spacing: -.012em;
@@ -212,6 +215,88 @@ body::after {
   box-shadow: var(--shadow-soft);
 }
 .card { padding: 24px 26px; margin-bottom: 18px; border-radius: 16px; background: rgba(255,255,255,.9); }
+
+/* 快捷导入：收起是一颗小芯片，展开才铺成表单，避免占掉训练计划首屏 */
+.pl-quick-fold { margin: 0 0 18px; }
+.pl-quick-fold:not([open]) { display: inline-flex; max-width: 100%; }
+.pl-quick-fold > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+.pl-quick-fold > summary::-webkit-details-marker,
+.pl-quick-fold > summary::marker { display: none; content: none; }
+.pl-quick-fold:not([open]) > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px 0 10px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255,255,255,.96), rgba(224,232,243,.88));
+  color: #354159;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -.012em;
+  box-shadow: inset 1px 1px 2px rgba(255,255,255,.96), inset -2px -3px 7px rgba(80,99,128,.12), 0 9px 20px rgba(59,78,108,.13);
+  transition: transform .2s var(--ease-out), box-shadow .2s ease;
+}
+.pl-quick-fold:not([open]) > summary:hover { transform: translateY(-1px); }
+.pl-quick-fold:not([open]) > summary:active { transform: translateY(1px) scale(.985); }
+.pl-quick-fold > summary .icon3d {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  vertical-align: 0;
+}
+.pl-quick-fold > summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-left: 2px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  opacity: .42;
+  transition: transform .2s var(--ease-out);
+}
+.pl-quick-fold[open] {
+  display: block;
+  padding: 20px 22px 22px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.9);
+  box-shadow: var(--shadow-soft);
+}
+.pl-quick-fold[open] > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 680;
+  letter-spacing: -.018em;
+  color: #182133;
+}
+.pl-quick-fold[open] > summary .icon3d { width: 26px; height: 26px; }
+.pl-quick-fold[open] > summary::after {
+  margin-left: auto;
+  transform: rotate(-135deg);
+  opacity: .35;
+}
+.pl-quick-fold-panel { display: grid; gap: 12px; }
+.pl-quick-fold-lead {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #6d788b;
+  max-width: 52em;
+}
+.pl-quick-fold #pl-quick {
+  min-height: 108px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.pl-quick-fold[open] .pl-quick-fold-panel { animation: cardIn .36s var(--ease-out) both; }
 .card h3 { font-size: 16px; font-weight: 680; letter-spacing: -.018em; }
 .card h3 .h-extra { color: #6d788b; font-weight: 500; }
 
@@ -423,3 +508,17 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }
+
+/* 成分混搭检查卡（护肤页）：风险分档与建议行。 */
+.sk-mix-item { border-bottom: 1px solid #9992; padding: 11px 0; }
+.sk-mix-item:last-child { border-bottom: 0; }
+.sk-mix-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sk-mix-advice { margin: 5px 0 0; font-weight: 650; color: #35415a; }
+.badge.sk-mix-avoid { background: #fde8ea; color: #b43f51; }
+.badge.sk-mix-caution { background: #fdf3e0; color: #96691c; }
+.badge.sk-mix-info { background: #e4f3ec; color: #2f7d5b; }
+html.dark .sk-mix-advice { color: #d9deec; }
+html.dark .sk-mix-item { border-bottom-color: #ffffff1a; }
+html.dark .badge.sk-mix-avoid { background: #4a2730; color: #ffb4a1; }
+html.dark .badge.sk-mix-caution { background: #463a25; color: #e2b45c; }
+html.dark .badge.sk-mix-info { background: #22423a; color: #4ade80; }

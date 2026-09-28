@@ -57,3 +57,80 @@
 @media (max-width:1150px) { .ac-layout { grid-template-columns:minmax(0,1fr); gap:18px; }.ac-detail { display:grid; grid-template-columns:1fr 1fr; gap:0 20px; }.ac-detail-track,.ac-detail-hint,.ac-entries,.ac-month-summary { grid-column:1 / -1; }.ac-day-status { margin-top:4px; text-align:right; }.ac-detail-total { grid-column:1 / -1; }.ac-month-summary { flex-direction:row; flex-wrap:wrap; gap:18px; }.ac-day { min-height:66px; }.ac-day > .icon3d { right:8px; } }
 @media (max-width:1000px) { .ac-calendar { padding:18px !important; }.ac-toolbar { align-items:flex-start; }.ac-month-title { gap:8px; }.ac-navigation { gap:5px; }.ac-navigation .btn { padding:5px 7px; font-size:11px; }.ac-navigation .icon3d { width:20px; height:20px; } }
 @media (prefers-reduced-motion:reduce) { .ac-day { transition:none; } }
+
+/* ================= 成就等级系列卡（badgeSeries）：竖版格子网格 ================= */
+.ab-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin-top: 12px; }
+.ab-card { display: flex; flex-direction: column; gap: 10px; padding: 16px 14px; border-radius: 18px;
+  background: rgba(255,255,255,.55); border: 1px solid rgba(44,58,71,.08); }
+.ab-card.on { border-color: rgba(123,116,226,.35); box-shadow: 0 10px 24px rgba(79,83,181,.12); }
+.ab-card-ico { font-size: 34px; line-height: 1; text-align: center; }
+.ab-card-name { text-align: center; font-weight: 700; font-size: 15px; color: #2c3a47; }
+.ab-card-lv { text-align: center; font-size: 12px; font-weight: 700; color: #7b74e2;
+  font-variant-numeric: tabular-nums; min-height: 16px; }
+.ab-card-desc { text-align: center; font-size: 10.5px; margin: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-card-tiers { display: flex; flex-direction: column; gap: 6px; }
+.ab-tier-cell { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: 8px;
+  padding: 6px 10px; border-radius: 10px; background: rgba(44,58,71,.05);
+  border: 1px solid rgba(44,58,71,.07); }
+.ab-tier-cell b { font-size: 11.5px; color: rgba(44,58,71,.5); font-variant-numeric: tabular-nums; }
+.ab-tier-cell span { font-size: 12px; color: rgba(44,58,71,.75); }
+.ab-tier-cell small { font-size: 10px; color: rgba(44,58,71,.45); font-variant-numeric: tabular-nums; }
+.ab-tier-cell.got { background: rgba(72,170,130,.1); border-color: rgba(72,170,130,.28); }
+.ab-tier-cell.got b, .ab-tier-cell.got span, .ab-tier-cell.got small { color: #1d6e4f; }
+.ab-tier-cell.cur { border-color: #7b74e2; box-shadow: 0 0 0 2px rgba(123,116,226,.15); }
+.ab-tier-cell.cur.got { background: rgba(123,116,226,.08); }
+.ab-card-progress { display: grid; gap: 4px; }
+.ab-progress-track { height: 7px; border-radius: 999px; background: rgba(44,58,71,.1); overflow: hidden; }
+.ab-progress-track i { display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, #887feb, #6575d5); }
+.ab-card-progress .hint { margin: 0; font-size: 10.5px; }
+
+/* ================= 2026-09-22 美化：达标日历格与成就卡 ================= */
+/* 达标格：薄荷渐变底 + 加深文字，成就感更强（保留原绿色相） */
+.ac-day.met { background: linear-gradient(160deg, rgba(214,240,228,.92), rgba(196,233,217,.78)); border-color:#9ed3b8; }
+.ac-day.met .ac-day-top b { color:#1f5e46; }
+.ac-day.met .ac-day-value { color:#2f7057; font-weight:600; }
+/* 部分完成格：紫色渐变 + 数字加重 */
+.ac-day.partial { background: linear-gradient(160deg, rgba(236,231,252,.9), rgba(226,219,250,.76)); border-color:#c9bfe9; }
+.ac-day.partial .ac-day-top b { color:#4c4382; }
+.ac-day.partial .ac-day-value { color:#5c539b; font-weight:600; }
+/* 未记录格：更安静的底色，与达标/部分形成层次 */
+.ac-day { background: linear-gradient(160deg, rgba(240,245,250,.6), rgba(233,240,248,.42)); }
+/* 日期数字与分钟数字更清晰 */
+.ac-day-top b { font-size:15px; font-weight:700; }
+.ac-day-value { font-size:10.5px; font-weight:600; min-height:13px; }
+.ac-day.unrecorded .ac-day-top b { font-weight:600; }
+/* 达标 3D 对勾：放大并带柔和投影，从「角落附件」变成「勋章」 */
+.ac-day.met > .icon3d { width:26px; height:26px; bottom:6px; right:5px; filter:drop-shadow(0 2px 3px rgba(31,94,70,.28)); }
+/* 进度条：高度 +1px，达标条加渐变高光 */
+.ac-day-progress { height:4px; border-radius:0 0 10px 10px; }
+.ac-day.met .ac-day-progress::after { background:linear-gradient(90deg,#6fb895,#8fd0b1); }
+.ac-day.partial .ac-day-progress::after { background:linear-gradient(90deg,#9a8dd8,#b5aae6); }
+/* 今天：淡紫填充 + 内侧光环，比单纯描边更有「当日」感 */
+.ac-day.is-today { border-color:#8f82cf; background:linear-gradient(160deg, rgba(243,240,255,.95), rgba(233,229,252,.85)); box-shadow:inset 0 0 0 1px rgba(143,130,207,.35); }
+.ac-day.is-today .ac-day-top b { color:#4a3f8f; }
+.ac-day.is-today small { background:rgba(122,108,194,.14); color:#5a4fa3; border-radius:6px; padding:1px 4px; font-weight:700; }
+/* 选中：offset 外描边保留，卡片投影加强 */
+.ac-day.is-selected { box-shadow:0 4px 14px rgba(115,102,165,.22); }
+/* 周末列日期数字带一点紫，与表头呼应 */
+.ac-weekdays span:nth-last-child(-n+2) { font-weight:700; }
+/* 近 7 天复盘卡：实底卡片化（原虚线框较随意） */
+.ac-week-review { border:1px solid rgba(151,170,192,.22) !important; background:rgba(248,250,253,.75); border-radius:14px !important; box-shadow:0 2px 8px rgba(82,97,123,.05); }
+/* 成就等级卡：3D 图标放大 + 底座光台，未解锁卡降饱和 */
+.ab-card-ico { display:flex; align-items:center; justify-content:center; width:64px; height:64px; margin:0 auto;
+  border-radius:22px; background:radial-gradient(circle at 50% 38%, rgba(255,255,255,.95), rgba(228,231,250,.55) 70%, rgba(203,205,238,.35));
+  box-shadow:inset 0 1px 2px rgba(255,255,255,.9), 0 6px 14px rgba(97,99,180,.14); }
+.ab-card-ico .icon3d { width:44px; height:44px; margin:0; }
+.ab-card-ico .ab-card-image { display:block; width:54px; height:54px; object-fit:contain; mix-blend-mode:multiply;
+  -webkit-mask-image:radial-gradient(circle at center, #000 50%, transparent 73%); mask-image:radial-gradient(circle at center, #000 50%, transparent 73%); }
+.ab-card { transition:transform .15s ease, box-shadow .15s ease; }
+.ab-card.on { background:linear-gradient(165deg, rgba(255,255,255,.78), rgba(240,239,255,.62)); }
+.ab-card.on .ab-card-ico { box-shadow:inset 0 1px 2px rgba(255,255,255,.95), 0 8px 18px rgba(79,83,181,.2); }
+.ab-card:not(.on) .ab-card-ico { filter:saturate(.35) opacity(.75); }
+.ab-card:not(.on) .ab-card-name { color:rgba(44,58,71,.55); }
+/* 顶部统计卡（成就页）图标点缀 */
+.stat-box.ac-stat { display:grid; grid-template-columns:auto 1fr; align-items:center; gap:12px; text-align:left; padding:14px 16px; }
+.stat-box.ac-stat .icon3d { width:34px; height:34px; margin:0; }
+.stat-box.ac-stat b { font-size:20px; letter-spacing:-.3px; }
+.stat-box.ac-stat span { font-size:11px; }

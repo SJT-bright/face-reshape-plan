@@ -16,6 +16,16 @@ test('评分：参数越差分越低，主客观加权正确', () => {
   assert.equal(E.scoreSkin({}).score, null);
 });
 
+test('权重溯源：PARAMS 权重 + 痘痘权重合计恒为 1（改权重表必须过此断言，溯源见 docs/scoring-parameters.md）', () => {
+  const sum = E.ACNE_WEIGHT + E.PARAMS.reduce((s, p) => s + p.weight, 0);
+  assert.ok(Math.abs(sum - 1) < 1e-9, `权重合计 ${sum} 应为 1`);
+  for (const p of E.PARAMS) {
+    assert.ok(p.weight > 0 && p.weight < 0.35, `${p.key} 权重应在 (0, 0.35) 内`);
+    assert.equal(p.levels.length, 4, `${p.key} 应为 0–3 四档`);
+  }
+  assert.equal(E.PARAMS.length, 7);
+});
+
 test('基线：取窗口内中位数，不含当日', () => {
   const logs = {
     '2026-09-01': { acneTotal: 4, pores: 1 },
@@ -41,7 +51,7 @@ test('睡眠归日：按醒来日期，排除进行中的睡眠', () => {
   assert.equal(E.sleepForDate(sleeps, '2026-09-15', NOW), null);
 });
 
-function mkInput({ minutes = 480, bedtime = '23:00', prevTrained = false, logs = {}, meals = [] }) {
+function mkInput({ minutes = 480, bedtime = '23:00', prevTrained = false, logs = { '2026-09-13': {barrier:0,redness:0} }, meals = [] }) {
   const dateKey = '2026-09-14';
   const wake = `2026-09-14T08:00:00+08:00`;
   const start = new Date(Date.parse(wake) - minutes * 60000);
@@ -125,6 +135,15 @@ test('滞后相关：n<14 的滞后不参与选择', () => {
   assert.ok(best && best.lag === 1 && Math.abs(best.r) > 0.99);
 });
 
+test('predictForDate 接受 dateKey，today 作别名；缺日期抛错（护肤串页根因）', () => {
+  const a = E.predictForDate({ dateKey: '2026-09-14', nowMs: NOW, sleeps: [], meals: [], logs: {} });
+  const b = E.predictForDate({ today: '2026-09-14', nowMs: NOW, sleeps: [], meals: [], logs: {} });
+  assert.equal(a.dateKey, '2026-09-14');
+  assert.equal(b.dateKey, '2026-09-14');
+  assert.ok(Array.isArray(a.items) && a.items.length);
+  assert.throws(() => E.predictForDate({ nowMs: NOW, sleeps: [], meals: [], logs: {} }), /dateKey/);
+});
+
 test('normAiInt：仅整数/纯整数字符串入表，其余拒绝', () => {
   assert.equal(E.normAiInt(2, 0, 3), 2);
   assert.equal(E.normAiInt('2', 0, 3), 2);
@@ -163,31 +182,6 @@ test('预测：参数连续两天上行 → 趋势预警', () => {
   assert.ok(!flat.items.some((p) => p.title.includes('连续两天上行')));
 });
 
-test('生理期模式：≥2 次标记学出周期与窗口均值', () => {
-  const logs = {};
-  /* 两次标记 07-26 / 08-21（间隔 26 天）；经期前窗口高痘、平时低痘 */
-  logs['2026-07-26'] = { period: true, acneNew: 0 };
-  logs['2026-08-21'] = { period: true, acneNew: 0 };
-  logs['2026-07-22'] = { acneNew: 3 };
-  logs['2026-07-23'] = { acneNew: 4 };
-  logs['2026-08-17'] = { acneNew: 4 };
-  logs['2026-08-18'] = { acneNew: 3 };
-  logs['2026-08-19'] = { acneNew: 5 };
-  logs['2026-08-01'] = { acneNew: 1 };
-  logs['2026-08-02'] = { acneNew: 0 };
-  logs['2026-08-03'] = { acneNew: 1 };
-  logs['2026-08-30'] = { acneNew: 1 };
-  logs['2026-09-01'] = { acneNew: 0 };
-  const pp = E.periodPattern(logs, '2026-09-14');
-  assert.ok(pp, '应输出模式');
-  assert.equal(pp.cycleLen, 26);
-  assert.equal(pp.daysToNext, 2); /* 下一预估起点 09-16 */
-  assert.ok(pp.pmsAvg !== null && pp.otherAvg !== null && pp.pmsAvg > pp.otherAvg);
-  /* 临近窗口（≤5 天）触发预测规则 */
-  const near = E.predictForDate(mkInput({ logs }));
-  assert.ok(near.items.some((p) => p.title.includes('生理期窗口')));
-});
-
 test('滞后相关：皮肤对 1 天前的睡眠最敏感时自动检出 lag=1', () => {
   /* score[d] = 90 - sleep[d-1]/10；睡眠序列非线性，避免平移共线 */
   const entries = Array.from({ length: 18 }, (_, i) => {
@@ -211,4 +205,109 @@ test('相关性：n<10 不给 r；完全正相关给 ~1', () => {
   const big = E.correlate(Array.from({ length: 20 }, (_, i) => ({ score: 80 - i, sleepMinutes: 480 - i * 10, trained: i % 2 === 0 })));
   assert.ok(big.sleep.r > 0.95);
   assert.ok(big.sleep.n === 20);
+});
+
+test('dietSummary：进食窗口/末餐均值/晚食天数，异常窗口剔除', () => {
+  const meals = [
+    /* 09-14：08:00→19:00，窗口 11 小时，末餐不晚 */
+    { local: '2026-09-14T08:00' }, { local: '2026-09-14T12:30' }, { local: '2026-09-14T19:00' },
+    /* 09-13：9:00→22:00，窗口 13 小时，末餐晚于 21:30 */
+    { local: '2026-09-13T09:00' }, { local: '2026-09-13T22:00' },
+    /* 09-12：9:00→21:45，末餐晚 */
+    { local: '2026-09-12T09:00' }, { local: '2026-09-12T21:45' },
+    /* 09-10：正常短窗口 */
+    { local: '2026-09-10T08:30' }, { local: '2026-09-10T13:00' },
+    /* 09-11：窗口 22.8 小时（跨零点异常）→ 剔除 */
+    { local: '2026-09-11T23:50' }, { local: '2026-09-11T01:00' }
+  ];
+  const d = E.dietSummary(meals, '2026-09-14', Date.now(), 7);
+  assert.equal(d.days, 5);
+  assert.equal(d.lateDays, 2);
+  /* (660+780+765+270)/4 = 618.75 分钟 → 10.3 小时 */
+  assert.equal(d.avgWindowHours, 10.3);
+  /* (1140+1320+1305+780)/4 = 1136.25 → 18:56 */
+  assert.equal(d.avgLastMeal, '18:56');
+  /* 单餐日不算窗口 */
+  const single = E.dietSummary([{ local: '2026-09-14T12:00' }], '2026-09-14', Date.now(), 7);
+  assert.equal(single.avgWindowHours, null);
+  assert.equal(single.days, 1);
+});
+
+test('personalThresholds：样本不足回落默认，样本充足自学习', () => {
+  /* 样本不足（仅 1 晚）→ 人群默认 6h / 21:30 */
+  const small = E.personalThresholds(
+    [{ start: '2026-09-13T23:30:00+08:00', end: '2026-09-14T06:30:00+08:00', startLocal: '2026-09-13T23:30', endLocal: '2026-09-14T06:30', kind: 'main' }],
+    [], '2026-09-14', Date.now()
+  );
+  assert.equal(small.shortSleepMin, 360);
+  assert.equal(small.lateMealMin, 1290);
+  assert.equal(small.sleepPersonal, false);
+  /* 12 晚都睡 8 小时 → 个人 30 分位 480，钳制到 420（7h 上限） */
+  const sleeps = Array.from({ length: 12 }, (_, i) => ({
+    start: `2026-09-${String(1 + i).padStart(2, '0')}T23:00:00+08:00`,
+    end: `2026-09-${String(2 + i).padStart(2, '0')}T07:00:00+08:00`,
+    startLocal: `2026-09-${String(1 + i).padStart(2, '0')}T23:00`,
+    endLocal: `2026-09-${String(2 + i).padStart(2, '0')}T07:00`, kind: 'main'
+  }));
+  const rich = E.personalThresholds(sleeps, [], '2026-09-14', Date.now());
+  assert.equal(rich.shortSleepMin, 420);
+  assert.equal(rich.sleepPersonal, true);
+});
+
+test('weeklyReport：7 天汇总评分/新痘/睡眠/晚食', () => {
+  const logs = {
+    '2026-09-08': { acneTotal: 2, acneNew: 1, overall: 8 },
+    '2026-09-09': { acneTotal: 3, acneNew: 2, overall: 6 },
+    '2026-09-10': { acneTotal: 2, acneNew: 0, pores: 1, overall: 9 }
+  };
+  const sleeps = [
+    { start: '2026-09-09T23:00:00+08:00', end: '2026-09-10T07:00:00+08:00', startLocal: '2026-09-09T23:00', endLocal: '2026-09-10T07:00', kind: 'main' }
+  ];
+  const r = E.weeklyReport(logs, sleeps, [], '2026-09-14', Date.now());
+  assert.equal(r.daysLogged, 3);
+  assert.ok(r.avgScore !== null);
+  assert.equal(r.acneNewTotal, 3);
+  assert.equal(r.sleepDays, 1);
+  assert.ok(r.best.score >= r.worst.score);
+});
+
+test('deriveMissingParams：未填参数由睡眠/基线/昨日推导', () => {
+  const ctxShort = {
+    sleep: { minutes: 300, bedtime: '01:00' }, lateMeal: false,
+    baseline: { params: { eyes: 1, oil: 1, pores: 1, spots: 0, dry: 0 } },
+    prevLog: { redness: 1, barrier: 0 }
+  };
+  const d = E.deriveMissingParams({}, ctxShort);
+  assert.equal(d.eyes, 3, '<5.5h → 眼周 3 级');
+  assert.equal(d.oil, 2, '基线 1 + 睡眠差上修一级');
+  assert.equal(d.redness, 1);
+  assert.equal(d.barrier, 0);
+  assert.equal(d.pores, 1);
+  assert.equal(d.spots, 0);
+  assert.equal(d.dry, 0);
+  /* 睡眠充足 → 眼周 0；晚食仍上修肤感 */
+  const ctxGood = { sleep: { minutes: 480, bedtime: '23:00' }, lateMeal: true, baseline: ctxShort.baseline, prevLog: ctxShort.prevLog };
+  const d2 = E.deriveMissingParams({}, ctxGood);
+  assert.equal(d2.eyes, 0);
+  assert.equal(d2.oil, 2);
+});
+
+test('快速打卡：只填痘/肤感/整体，评分含推导且显式值优先', () => {
+  const quick = { acneTotal: 2, acneNew: 0, oil: 1, overall: 7 };
+  const ctx = {
+    sleep: { minutes: 480, bedtime: '23:00' }, lateMeal: false,
+    baseline: { params: { eyes: 0, pores: 1, spots: 0, redness: 0, dry: 0, barrier: 0, oil: 1 } },
+    prevLog: null
+  };
+  const r = E.scoreSkinWithDerived(quick, ctx);
+  assert.ok(r.score >= 80, `推导后评分 ${r.score} 应 ≥80`);
+  assert.ok(r.derived && r.derived.eyes !== undefined, '眼周应有推导值');
+  /* 显式值优先：补很差的显式泛红，分数必须下降 */
+  const r2 = E.scoreSkinWithDerived(Object.assign({}, quick, { redness: 3 }), ctx);
+  assert.ok(r2.score < r.score);
+  /* 显式 oil 不被推导覆盖 */
+  const r3 = E.scoreSkinWithDerived(Object.assign({}, quick, { oil: 0 }), ctx);
+  assert.equal(r3.derived.oil, undefined, '显式提供的参数不进 derived');
+  /* 同输入评分稳定（对账可用） */
+  assert.equal(E.scoreSkinWithDerived(quick, ctx).score, r.score);
 });

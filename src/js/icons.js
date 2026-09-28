@@ -51,8 +51,12 @@
     if (/选择训练日/.test(label)) return 'target';
     if (/添加|新增|新建/.test(label)) return 'add';
     if (/计划安排/.test(label)) return 'calendar';
-    if (/跟练|训练|播放器/.test(label)) return 'play';
-    return 'check';
+    if (/跟练|训练|播放器|开练/.test(label)) return 'play';
+    if (/视频库/.test(label)) return 'video';
+    if (/睡眠/.test(label)) return 'moon';
+    if (/护理|皮肤/.test(label)) return 'skincare';
+    if (/餐/.test(label)) return 'nutrition';
+    return 'edit';
   }
 
   function enhance(root) {

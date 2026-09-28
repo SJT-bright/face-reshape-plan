@@ -1,0 +1,104 @@
+/* Moonlit counterpart to the original optical sculpture; day styles stay intact. */
+html.dark {
+  color-scheme: dark;
+  --bg: #202126;
+  --panel: rgba(34, 35, 41, .7);
+  --card: rgba(40, 41, 48, .76);
+  --card2: rgba(48, 49, 56, .58);
+  --text: #e3e3e9;
+  --muted: #b3b3c1;
+  --border: rgba(226, 225, 242, .13);
+  --border2: rgba(226, 225, 242, .18);
+  --green: #8bc6b0;
+  --green-deep: #b4dece;
+  --green-soft: rgba(124, 182, 158, .14);
+  --accent: #afa9d8;
+  --grad: linear-gradient(145deg, #bcb5e0, #a3b5ca);
+  --shadow-soft: 0 14px 36px rgba(0, 0, 0, .16), inset 0 1px 0 rgba(255, 255, 255, .045);
+  --img-bg: url('assets/img/optical-sculpture-night.png');
+}
+html.dark body { background: #202126; color: var(--text); }
+html.dark body::before { display: block; background-image: var(--img-bg); }
+html.dark body::after {
+  display: block;
+  background: linear-gradient(90deg, rgba(23,24,29,.65), rgba(23,24,29,.34) 45%, rgba(23,24,29,.14));
+}
+html.dark #sidebar {
+  background: rgba(30,31,37,.6);
+  backdrop-filter: blur(22px) saturate(.65);
+  box-shadow: inset -1px 0 rgba(225,225,240,.07);
+}
+html.dark #topbar { background: rgba(32,33,39,.55); backdrop-filter: blur(22px); border-bottom: 1px solid var(--border); }
+html.dark .brand-sub { color: #a9a9bb; }
+html.dark .nav-item { background: transparent; color: #c0bfcd; box-shadow: none; border: 1px solid transparent; }
+html.dark .nav-item:hover { background: rgba(221,218,242,.055); }
+html.dark .nav-item.active {
+  color: #eeecf5; background: linear-gradient(135deg, rgba(200,194,226,.16), rgba(200,194,226,.05));
+  border-color: rgba(210,205,235,.2); box-shadow: inset 0 1px rgba(255,255,255,.04), 0 8px 20px rgba(0,0,0,.08);
+}
+html.dark .card, html.dark .cycle-card, html.dark .rhythm-card,
+html.dark .stat-box, html.dark .sk-col, html.dark .today-item,
+html.dark .session-item, html.dark .st-bmi, html.dark .st-wday,
+html.dark .sk-detail, html.dark .mini-stat {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(18px) saturate(.75);
+}
+html.dark .session-item, html.dark .today-item, html.dark .sk-step,
+html.dark .st-act-row, html.dark .rhythm-form, html.dark .rhythm-assessment,
+html.dark .ac-detail, html.dark .ac-entry, html.dark .vid-card, html.dark .course-info {
+  background: rgba(31,32,39,.58) !important;
+}
+html.dark .hint, html.dark .card h3 .h-extra, html.dark .rhythm-caption,
+html.dark .vid-meta, html.dark .t-time, html.dark .t-name span { color: #b3b3c1 !important; }
+html.dark .today-top { background: rgba(30,31,37,.64); box-shadow: var(--shadow-soft); border: 1px solid var(--border); }
+html.dark .today-top::after { display: block; background-image: var(--img-bg); opacity: .85; }
+html.dark .today-title { color: var(--text); }
+html.dark .today-top-hint { color: #bcbacb; }
+html.dark .input, html.dark .select, html.dark .textarea { background: rgba(17,18,24,.34); color: var(--text); border-color: var(--border2); }
+html.dark .btn, html.dark .btn-go, html.dark #mini-session-open {
+  background: linear-gradient(150deg, #494953, #35363f); color: #e3e2eb;
+  border-color: rgba(225,222,244,.18); box-shadow: inset 0 1px rgba(255,255,255,.06), 0 3px 0 rgba(13,14,19,.4), 0 7px 16px rgba(0,0,0,.13);
+}
+html.dark .btn.primary, html.dark .btn-go { background: linear-gradient(145deg, #77718f, #595574); color: #faf7ff; }
+html.dark .btn.green { background: linear-gradient(145deg, #526f64, #3c584e); color: #deeee6; }
+html.dark .btn.danger { background: #62484b; color: #ffe0df; }
+html.dark .btn.ghost { background: rgba(200,197,221,.055); color: #c2c0ce; }
+html.dark .pill.ok { background: rgba(112,167,141,.17); color: #b2ddc5; }
+html.dark .pill.part { background: rgba(184,157,107,.16); color: #e0caa2; }
+html.dark #modal-card, html.dark .toast { background: #303139; border: 1px solid var(--border); }
+html.dark ::selection { background: #605b77; color: #fff; }
+html.dark :focus-visible { outline-color: #b4abd9; }
+html.dark ::-webkit-scrollbar-thumb { background-color: rgba(203,199,219,.25); }
+
+/* Stars sit underneath an opaque video rectangle, never on its image or controls. */
+night-sky { display: none; }
+html.dark #stage-wrap {
+  position: relative; isolation: isolate; overflow: hidden; padding: 48px 40px 24px;
+  border-radius: 24px; border: 1px solid var(--border);
+  background: radial-gradient(ellipse at 50% 0%, rgba(122,118,151,.18), transparent 65%), rgba(20,21,28,.93);
+  box-shadow: var(--shadow-soft);
+}
+html.dark night-sky { display: block; position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+html.dark night-sky i {
+  position: absolute; width: var(--size); height: var(--size); border-radius: 50%;
+  background: #d5d2e6; opacity: .3; box-shadow: 0 0 5px rgba(200,197,225,.22);
+  animation: night-star-breathe var(--duration) ease-in-out var(--delay) infinite alternate;
+}
+html.dark night-sky[paused] i { animation-play-state: paused; }
+html.dark .follow-stage { background: #111217; border-color: rgba(219,214,239,.13); box-shadow: 0 15px 45px rgba(0,0,0,.3); }
+html.dark .timer-hud { background: rgba(41,42,51,.84); border-color: var(--border); backdrop-filter: blur(12px); margin-bottom: 0; }
+html.dark .timer-big { filter: none; }
+html.dark #stage-wrap:fullscreen { display: flex; flex-direction: column; justify-content: center; padding: 32px 6vw; border-radius: 0; }
+html.dark #stage-wrap:fullscreen .follow-stage { width: 100%; min-height: 0; max-height: calc(100vh - 190px); flex: 1; }
+html.dark #stage-wrap:fullscreen .timer-hud { flex: 0 0 auto; }
+@keyframes night-star-breathe {
+  from { opacity: .18; transform: translate3d(0,0,0); }
+  to { opacity: .5; transform: translate3d(3px,-5px,0); }
+}
+@media (max-width: 1100px) { html.dark #stage-wrap { padding: 30px 22px 20px; } }
+@media (prefers-reduced-motion: reduce) { html.dark night-sky i { animation: none; opacity: .3; } }
+/* Keep the elapsed time legible against the moonlit control surface. */
+html.dark .timer-big { color: #d3cee6; background: none; -webkit-text-fill-color: #d3cee6; }
+html.dark .course-card, html.dark .course-thumb { background: rgba(31,32,39,.65); border-color: var(--border); }

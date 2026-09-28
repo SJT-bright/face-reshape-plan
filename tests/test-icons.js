@@ -1,10 +1,10 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { app, BrowserWindow } = require('electron');
 
-const profilePath = path.join(__dirname, '.electron-profile');
-fs.rmSync(profilePath, { recursive: true, force: true });
+const profilePath = fs.mkdtempSync(path.join(os.tmpdir(), 'face-icons-profile-'));
 app.setPath('userData', profilePath);
 app.commandLine.appendSwitch('disk-cache-dir', path.join(profilePath, 'cache'));
 

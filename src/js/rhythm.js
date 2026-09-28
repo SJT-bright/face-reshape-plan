@@ -94,7 +94,8 @@ const Rhythm = {
           });
           imported++;
         }
-      }, imported ? `已导入 ${imported} 条${skipped ? ` · 跳过 ${skipped} 条（重复/无效）` : ''}` : '没有新记录可导入');
+      }, '');
+      toast(imported ? `已导入 ${imported} 条${skipped ? ` · 跳过 ${skipped} 条（重复/无效）` : ''}` : '没有新记录可导入');
       this.refresh();
     } finally {
       this.importBusy = false;
@@ -125,13 +126,69 @@ const Rhythm = {
   invalidate(data, key, field) {
     if (key) data.completeDays[key] = { ...data.completeDays[key], [field]: false };
   },
-  refresh() { if (App.currentView === 'nutrition') this.view($('#view-root')); },
+  refresh() { if (App.currentView === 'nutrition') App.render(); },
+  /* 今日饮食参考：宏量营养素目标（按身高体重/训练量）+ 今天已记录的餐次时间。
+     口径与出处见 docs/nutrition-advice-design.md；应用只记餐次时间，不虚构热量统计。 */
+  nutritionCardHtml() {
+    const t = todayKey();
+    const profile = Store.db.profile || (Store.db.strength && Store.db.strength.bmiProfile) || {};
+    let weeklySets = null;
+    try {
+      if (typeof StrengthCore !== 'undefined' && Store.db.strength) {
+        const muscles = StrengthCore.muscleProgress(Store.db.strength, t);
+        const max = Math.max(...muscles.map(m => m.weeklyStimSets || 0));
+        if (Number.isFinite(max) && max > 0) weeklySets = max;
+      }
+    } catch { weeklySets = null; }
+    const meals = RhythmEngine.summarizeMealsToday(this.data(), t);
+    const advice = profile.age && ['男','女'].includes(profile.sex) && profile.activity ? RhythmEngine.nutritionAdvice(profile, { weeklySets, mealCount: meals.count }) : null;
+    const sugar = (this.data().sugarLog || {})[t];
+    const gly = RhythmEngine.glycemicScore(this.data(), t);
+    const tierTxt = advice
+      ? (advice.tier === 'high' ? '力量训练量高' : advice.tier === 'training' ? '规律力量训练' : advice.tier === 'light' ? '训练量较少' : '未记录力量训练')
+      : '';
+    /* 加餐也计入「进食次数」（应用不区分食物构成）；蛋白分餐按进食次数折算 */
+    const mealsTxt = meals.count
+      ? `今天已记录 <b>${meals.count}</b> 次进食（${esc(meals.first)} → ${esc(meals.last)}${meals.spanMinutes ? ` · 进食跨度约 ${Math.round(meals.spanMinutes / 30) / 2} 小时` : ''}）`
+      : '今天还没记录进食时间——在上方「进餐时间」记一下即可（加餐也算）。';
+    return `
+      <section class="rhythm-card" aria-labelledby="rh-nutrition-title">
+        <div class="rhythm-heading"><div><h2 id="rh-nutrition-title">🍚 今日饮食参考</h2>
+          <p class="rhythm-caption">按你的身高体重与训练量给「目标」口径；应用只记餐次时间，不统计实际热量。</p></div>
+          <span class="rhythm-local">${tierTxt}</span></div>
+        <p class="rhythm-caption" style="margin:0 0 10px">${mealsTxt}</p>
+        ${advice ? `
+        <div class="rhythm-metrics">${[
+          ['维持热量参考', `${advice.tdee} kcal`, `基础代谢 ${advice.bmr} kcal${advice.ageAssumed ? '（年龄缺省按 30 岁估算）' : ''}${advice.sexAssumed ? '（性别缺省按男性估算）' : ''}`],
+          ['蛋白质', `${advice.proteinG} g`, `${advice.proteinPerKg} g/kg · ${tierTxt}`],
+          ['脂肪', `${advice.fatG} g`, `供能约 ${advice.fatPct}%（带 20–30%）`],
+          ['碳水化合物', `${advice.carbsG} g`, `约 ${advice.carbsPerKg} g/kg · 供能比约束在 50–65%`],
+          ['饮水', `${advice.waterMl} ml`, `30–35 ml/kg${advice.waterClamped ? '（已按 1500–2500ml 截取）' : ''}`]
+        ].map(([label, value, note]) => `<div><span>${label}</span><strong>${value}</strong><small>${esc(note)}</small></div>`).join('')}</div>
+        <div style="display:grid; gap:4px; margin-top:10px">${advice.notes.map(n => `<span style="font-size:12.5px; color:#53667b">· ${esc(n)}</span>`).join('')}</div>
+        <p class="rhythm-caption" style="margin-top:8px">${esc(advice.disclaimer)} 个人资料在「设置 → 个人资料」里填写。</p>`
+        : '<p class="hint">请到「设置 → 个人资料」补充身高、体重、年龄、性别与活动水平，再计算营养目标。缺项不自动采用默认值。</p>'}
+        <div style="margin-top:14px; padding:10px 12px; border:1px dashed rgba(83,102,123,.3); border-radius:10px">
+          <div class="rhythm-sleep-times" style="grid-template-columns:auto 1fr; align-items:center; gap:10px">
+            <span style="font-size:12.5px; color:#53667b">今天甜食（估算，选一档）：</span>
+            <div style="display:flex; gap:6px; flex-wrap:wrap">
+              ${['无甜食', '少量', '适量', '偏多'].map((label, v) => `<button class="btn small ghost" data-sugar="${v}" data-sel="${sugar === v ? 1 : 0}" data-no-icon="true" style="${sugar === v ? 'border-color:#5b8def; color:#2f5fe0; background:rgba(91,141,239,.1)' : ''}">${label}</button>`).join('')}
+            </div>
+          </div>
+          ${gly ? `<div style="margin-top:8px"><b style="font-size:13px; color:#2f4257">🩸 血糖友好习惯参考 ${gly.score}/100</b><span class="rhythm-caption" style="margin-left:6px">${esc(gly.factors.map(f => `${f.label} ${f.factor}`).join(' · '))}</span>
+            <div style="display:grid; gap:3px; margin-top:4px">${gly.factors.map(f => `<span style="font-size:11.5px; color:#7a8798">· ${esc(f.note)}</span>`).join('')}</div>
+            ${gly.tomorrowActions && gly.tomorrowActions.length ? `<div style="margin-top:6px; padding:8px 10px; border:1px dashed rgba(91,141,239,.4); border-radius:9px; display:grid; gap:3px"><b style="font-size:12px; color:#2f4257">👉 明天可以先做一件事</b>${gly.tomorrowActions.slice(0, 1).map(a => `<span style="font-size:11.5px; color:#53667b">${esc(a)}</span>`).join('')}</div>` : ''}
+            <p class="rhythm-caption" style="margin:4px 0 0">${esc(gly.disclaimer)}</p></div>`
+          : '<p class="rhythm-caption" style="margin:8px 0 0">选一档甜食后，这里结合进食跨度与晚间进食给出血糖友好习惯参考分（非血糖测量）。</p>'}
+        </div>
+      </section>`;
+  },
   view(root) {
     this.selectedDay ||= todayKey();
     const d = this.data(), selected = this.selectedDay;
     const report = RhythmEngine.analyze(d, { days: this.range });
-    const meals = d.meals.filter(m => m.local.slice(0, 10) === selected).sort((a, b) => a.local.localeCompare(b.local));
-    const sleeps = d.sleeps.filter(s => (s.endLocal || s.startLocal).slice(0, 10) === selected).sort((a, b) => a.start.localeCompare(b.start));
+    const meals = d.meals.filter(m => typeof m.local === 'string' && m.local.slice(0, 10) === selected).sort((a, b) => a.local.localeCompare(b.local));
+    const sleeps = d.sleeps.filter(s => typeof (s.endLocal || s.startLocal) === 'string' && (s.endLocal || s.startLocal).slice(0, 10) === selected).sort((a, b) => a.start.localeCompare(b.start));
     const unfinished = d.sleeps.filter(s => !s.end);
     const states = {
       descriptive: ['先记录，再慢慢看出规律', '选择适用的作息类型后，可开启习惯提醒。其他年龄或轮班作息也可以持续记录和查看趋势。'],
@@ -149,19 +206,21 @@ const Rhythm = {
       <section class="rhythm-card rhythm-journal" aria-labelledby="rh-journal-title">
         <div class="rhythm-heading"><h2 id="rh-journal-title">日常记录</h2><div class="rhythm-date"><button class="btn small ghost" id="rh-prev" aria-label="前一天">前一天</button><input id="rh-date" type="date" min="2000-01-01" max="${todayKey()}" value="${selected}" aria-label="查看记录日期"><button class="btn small ghost" id="rh-today">今天</button></div></div>
         <div class="rhythm-log-columns">
-          <div><h3>${this.icon('nutrition')}进餐时间</h3><p class="rhythm-caption">记吃完的大致时间，也可以记加餐。</p>
-            <div class="rhythm-records">${meals.length ? meals.map(m => `<div class="rhythm-record"><div><strong>${esc(m.local.slice(11))}</strong><span>${m.kind === 'snack' ? '加餐' : '吃了一餐'}</span></div><button class="btn small ghost" data-meal="${esc(m.id)}" aria-label="编辑 ${esc(m.local.slice(11))} 进餐">编辑</button></div>`).join('') : '<p class="rhythm-empty">这一天还没有进餐记录。</p>'}</div>
+          <div><h3>${this.icon('nutrition')}进餐时间</h3><p class="rhythm-caption">记吃完的大致时间，餐别按时间自动归类，可以改。</p>
+            <div class="rhythm-records">${meals.length ? meals.map(m => { const chip = this.mealChip(m); return `<div class="rhythm-record rhythm-record-meal"><div class="rhythm-record-main"><strong>${esc(m.local.slice(11))}</strong><span class="rhythm-meal-chip" data-kind="${esc(chip.kind)}">${esc(chip.text)}</span></div><button class="btn small ghost" data-meal="${esc(m.id)}" aria-label="编辑 ${esc(m.local.slice(11))} 进餐">编辑</button></div>`; }).join('') : '<p class="rhythm-empty">这一天还没有进餐记录。</p>'}</div>
             <label class="rhythm-check"><input id="rh-complete-meals" type="checkbox" ${d.completeDays[selected]?.meals ? 'checked' : ''}>这一天的进餐已记全</label>
           </div>
-          <div class="rhythm-sleep-column"><h3>${this.icon('moon')}手环睡眠记录</h3><p class="rhythm-caption">早上按手环填写，起床日期就是上方所选日期。</p>
+          <div class="rhythm-sleep-column"><h3>${this.icon('moon')}手环睡眠记录</h3><p class="rhythm-caption">早上按手环填入睡和起床时间，再填夜间清醒总时间，累计睡眠自动算出。</p>
             ${this.sleepForm(sleeps)}
+            ${this.sleepAdviceHtml()}
             ${sleeps.filter(s => s.end).length ? `<details class="rhythm-sleep-history"><summary>查看这一天的睡眠记录（${sleeps.filter(s => s.end).length}）</summary>${sleeps.filter(s => s.end).map(s => { const qd = this.sleepDetail(s); return `<div class="rhythm-record"><div><strong>${esc(s.startLocal.slice(11))} → ${esc(s.endLocal.slice(11))}</strong><span>${s.kind === 'nap' ? '午睡 / 小睡' : '主要睡眠'} · ${this.duration(RhythmEngine.sleepMinutes(s))}${qd && qd.q ? ` · ${qd.q.score} 分` : ''}${s.source === 'lifepivot' ? ' · 来自个人积累库' : ''}</span></div><button class="btn small ghost" data-sleep="${esc(s.id)}">编辑</button></div>`; }).join('')}</details>` : ''}
             ${unfinished.length ? `<details class="rhythm-sleep-history"><summary>旧版未完成记录（${unfinished.length}）</summary><p class="rhythm-caption">这些旧记录已保留，不参与统计；可填写完整时间或删除。</p>${unfinished.map(s => `<div class="rhythm-record"><span>${esc(s.startLocal.replace('T', ' '))}</span><button class="btn small ghost" data-sleep="${esc(s.id)}">整理记录</button></div>`).join('')}</details>` : ''}
           </div>
-        </div><p class="rhythm-caption rhythm-footnote">补记或修改后，请重新确认“已记全”。未记全的日子不用于判断进餐间隔或睡眠偏短。睡眠时长优先采用填写的手环数据，未填时按时间段估算。</p>
+        </div><p class="rhythm-caption rhythm-footnote">补记或修改后，请重新确认“已记全”。未记全的日子不用于判断进餐间隔或睡眠偏短。累计睡眠 = 起床 − 入睡 − 夜间清醒总时间（未填清醒时间则按时间差计算）；从个人积累库导入的历史记录仍优先使用其中的手环时长。</p>
       </section>
+      ${this.nutritionCardHtml()}
       <section class="rhythm-card sleep-quality-card" aria-labelledby="rh-sq-title">
-        <div class="rhythm-heading"><div><h2 id="rh-sq-title">睡眠质量体系<span class="sleep-badge-src">来自个人积累库</span></h2><p class="rhythm-caption">评分 = 手工分（如有）60% ＋ 时长/深睡/REM/夜醒/晨起感受 40% · 积分随记录累计</p></div><button class="btn small ghost" id="rh-import-sleep">从个人积累库导入</button></div>
+        <div class="rhythm-heading"><div><h2 id="rh-sq-title">睡眠质量体系<span class="sleep-badge-src">来自个人积累库</span></h2><p class="rhythm-caption">评分 = 手工分（如有）60% ＋ 时长/深睡/REM/夜醒/晨起感受 40% · 深睡 18%/REM 20% 参考带取自正常睡眠结构文献（N3 13–23%、REM 20–25%）· 积分随记录累计</p></div><button class="btn small ghost" id="rh-import-sleep">从个人积累库导入</button></div>
         ${(() => {
           const s = this.sleepQualitySummary();
           if (!s) return '<p class="rhythm-empty">还没有睡眠记录。手动记一条，或点右上角从个人积累库导入历史记录。</p>';
@@ -204,6 +263,19 @@ const Rhythm = {
     $('#rh-prev', root).onclick = () => { if (selected > '2000-01-01') { this.selectedDay = addDays(selected, -1); this.sleepEditId = undefined; this.refresh(); } };
     $('#rh-today', root).onclick = () => { this.selectedDay = todayKey(); this.sleepEditId = undefined; this.refresh(); };
     $('#rh-range', root).onchange = e => { this.range = Number(e.target.value); this.refresh(); };
+    const advWake = $('#rh-adv-wake', root);
+    if (advWake) advWake.onchange = async e => {
+      const v = e.target.value;
+      await this.commit(d => { d.tomorrowWake = v ? { date: todayKey(), time: v } : null; }, v ? '已按明早起床时间更新建议' : '已恢复按近期起床时刻计算');
+      this.refresh();
+    };
+    $$('[data-sugar]', root).forEach(b => {
+      b.onclick = async () => {
+        const tier = Number(b.dataset.sugar);
+        await this.commit(d => { d.sugarLog = { ...(d.sugarLog || {}), [todayKey()]: tier }; }, '已记录今天甜食档位');
+        this.refresh();
+      };
+    });
     $('#rh-profile', root).onchange = async e => { const value = e.target.value; await this.commit(data => { data.profile = value; }); this.refresh(); };
     ['meals'].forEach(field => {
       $(`#rh-complete-${field}`, root).onchange = async e => {
@@ -233,26 +305,50 @@ const Rhythm = {
     };
     card.querySelector('input')?.focus();
   },
+  /* 餐别徽章：优先记录里的餐别，旧记录按时刻即时分类兜底（不回写数据）。
+     加餐用灰徽章，夜宵用紫徽章；旧的「正餐 + 加餐」仍显示成「晚餐 · 加餐」。 */
+  mealChip(m) {
+    const id = (m.mealType && RhythmEngine.mealTypeLabel(m.mealType)) ? m.mealType : RhythmEngine.classifyMealType(m.local);
+    const label = RhythmEngine.mealTypeLabel(id);
+    const typeKind = RhythmEngine.mealTypeKind(id);
+    if (m.kind === 'snack' && typeKind === 'meal') return { kind: 'snack', text: label ? `${label} · 加餐` : '加餐' };
+    if (typeKind === 'snack' || m.kind === 'snack') return { kind: id === 'supper' ? 'supper' : 'snack', text: label || '加餐' };
+    return { kind: id || 'meal', text: label || '正餐' };
+  },
   mealModal(id) {
     const old = this.data().meals.find(m => m.id === id);
-    const defaultTime = `${this.selectedDay || todayKey()}T${hhmm()}`;
-    const card = openModal(`<form id="rh-form" class="rhythm-form"><h3>${old ? '编辑进餐' : '记一餐'}</h3><p class="rhythm-caption">不用记食物或热量，记下吃完的大致时间。</p><label>进餐时间<input name="time" type="datetime-local" value="${esc(old?.local || defaultTime)}" max="${RhythmEngine.localNow()}" min="2000-01-01T00:00" required></label><label>记录类型<select name="kind"><option value="meal">吃了一餐</option><option value="snack" ${old?.kind === 'snack' ? 'selected' : ''}>加餐</option></select></label>${this.modalFooter(old)}</form>`);
+    const timeValue = old?.local || `${this.selectedDay || todayKey()}T${hhmm()}`;
+    const selectedType = RhythmEngine.resolveMealSelection(old, timeValue);
+    const typeSel = RhythmEngine.MEAL_TYPE_WINDOWS.map(w => `<option value="${w.id}" ${selectedType === w.id ? 'selected' : ''}>${w.label}</option>`).join('');
+    const card = openModal(`<form id="rh-form" class="rhythm-form"><h3>${old ? '编辑进餐' : '记一餐'}</h3><p class="rhythm-caption">不用记食物或热量。选这一餐是早餐、午餐、晚餐，还是上午、下午、晚上的加餐。改时间会跟着变，也可以手改。</p><label>进餐时间<input name="time" type="datetime-local" value="${esc(timeValue)}" max="${RhythmEngine.localNow()}" min="2000-01-01T00:00" required></label><label>这一餐是<select name="mealType">${typeSel}</select></label>${this.modalFooter(old)}</form>`);
+    card.dataset.draftObject=old?.id||'new-meal';
     this.bindModal(card, old, 'meals');
+    const form = $('#rh-form', card), typeSelEl = form.elements.mealType;
+    /* 改时间时自动跟随分类，直到用户手动选过餐别（编辑旧记录视为已手动确认） */
+    let typeDirty = Boolean(old?.mealType);
+    typeSelEl.onchange = () => { typeDirty = true; };
+    form.elements.time.oninput = () => {
+      if (typeDirty) return;
+      const t = RhythmEngine.classifyMealType(form.elements.time.value);
+      if (t) typeSelEl.value = t;
+    };
     $('#rh-form', card).onsubmit = async e => {
       e.preventDefault();
       const f = e.target, local = f.elements.time.value;
-      const input = { id: old?.id, local };
+      const mealType = f.elements.mealType.value;
+      const input = { id: old?.id, local, mealType };
       const error = RhythmEngine.validateMeal(input, this.data());
       if (error) { $('#rh-error', card).textContent = error; return; }
       const p = RhythmEngine.parse(local);
+      const kind = RhythmEngine.mealTypeKind(mealType) === 'snack' ? 'snack' : 'meal';
       $('#rh-save', card).disabled = true;
       const ok = await this.commit(d => {
-        const record = { ...old, id: old?.id || uid('meal'), at: p.iso, local, offset: p.offset, kind: f.elements.kind.value };
+        const record = { ...old, id: old?.id || uid('meal'), at: p.iso, local, offset: p.offset, kind, mealType };
         if (old) d.meals[d.meals.findIndex(m => m.id === old.id)] = record; else d.meals.push(record);
         this.invalidate(d, old?.local.slice(0, 10), 'meals');
         this.invalidate(d, local.slice(0, 10), 'meals');
-      }, '进餐时间已记下');
-      if (ok) { this.selectedDay = local.slice(0, 10); closeModal(); this.refresh(); }
+      }, '进餐时间已记下 · 力量训练页会按这一餐给出开始时间');
+      if (ok) { this.selectedDay = local.slice(0, 10); closeModal(); if(App.currentView==='nutrition')this.refresh();else App.render(); }
       else $('#rh-save', card).disabled = false;
     };
   },
@@ -260,22 +356,24 @@ const Rhythm = {
     const old = this.sleepEditId ? this.data().sleeps.find(s => s.id === this.sleepEditId) : sleeps.find(s => s.end && s.kind === this.sleepKind);
     this.formSleepId = old?.id || null;
     const recent = this.data().sleeps.filter(s => s.end && s.kind === this.sleepKind && s.endLocal.slice(0, 10) < this.selectedDay).sort((a, b) => b.end.localeCompare(a.end))[0];
-    const bed = (old?.startLocal || recent?.startLocal)?.slice(11) || (this.sleepKind === 'nap' ? '13:00' : '23:00');
-    const wake = old && !old.end ? '' : (old?.endLocal || recent?.endLocal)?.slice(11) || (this.sleepKind === 'nap' ? '14:00' : '07:00');
-    const measured = old?.recordedMinutes;
+    /* 切类型时带上用户已填的时间（一次性消费 pending），不让用户重打 */
+    const pend = this._pendingSleepForm || null;
+    const pendBed = pend && /^\d{2}:\d{2}$/.test(pend.bed || '') ? pend.bed : null;
+    const pendWake = pend && /^\d{2}:\d{2}$/.test(pend.wake || '') ? pend.wake : null;
+    const bed = pendBed || (old?.startLocal || recent?.startLocal)?.slice(11) || (this.sleepKind === 'nap' ? '13:00' : '23:00');
+    const wake = pendWake || (old && !old.end ? '' : (old?.endLocal || recent?.endLocal)?.slice(11) || (this.sleepKind === 'nap' ? '14:00' : '07:00'));
     const detail = this.sleepDetail(old);
     const num = v => v == null ? '' : v;
     return `<form id="rh-sleep-form" class="rhythm-sleep-form">
       <div class="rhythm-sleep-times"><label>入睡时间<input name="bed" type="time" value="${esc(bed)}" required></label><label>起床时间<input name="wake" type="time" value="${esc(wake)}" required></label></div>
-      <p id="rh-sleep-dates" class="rhythm-caption"></p>
-      <details class="rhythm-sleep-extra" ${measured != null ? 'open' : ''}><summary>手环实际睡眠时长（选填）</summary><div class="rhythm-sleep-times"><label>小时<input name="hours" type="number" min="0" max="24" step="1" value="${measured == null ? '' : Math.floor(measured / 60)}" placeholder="如 7"></label><label>分钟<input name="minutes" type="number" min="0" max="59" step="1" value="${measured == null ? '' : measured % 60}" placeholder="如 30"></label></div><p class="rhythm-caption">可直接抄手环的睡眠时长，统计时优先使用。</p></details>
+      <label>夜间清醒总时间（分钟，选填）<input class="input" name="awakeMin" type="number" min="0" max="1440" step="1" value="${num(old?.awakeMinutes)}" placeholder="如 25 = 夜里清醒共 25 分钟"></label><p id="rh-sleep-dates" class="rhythm-caption"></p>
       <details class="rhythm-sleep-extra" ${old && (old.deepMinutes != null || old.morningFeeling != null || old.qualityScore != null) ? 'open' : ''}><summary>睡眠分期与感受（选填 · 计入质量评分）</summary>
         <div class="rhythm-sleep-times sleep-stages"><label>深睡(分)<input name="deepMin" type="number" min="0" max="720" step="1" value="${num(old?.deepMinutes)}" placeholder="如 94"></label><label>浅睡(分)<input name="lightMin" type="number" min="0" max="720" step="1" value="${num(old?.lightMinutes)}" placeholder="如 216"></label><label>REM(分)<input name="remMin" type="number" min="0" max="720" step="1" value="${num(old?.remMinutes)}" placeholder="如 38"></label></div>
         <div class="rhythm-sleep-times sleep-stages"><label>夜醒次数<input name="awakeEp" type="number" min="0" max="50" step="1" value="${num(old?.awakeEpisodes)}" placeholder="如 2"></label><label>晨起感受(1-5)<input name="feeling" type="number" min="1" max="5" step="1" value="${num(old?.morningFeeling)}" placeholder="3"></label><label>主观质量分(60-100)<input name="qScore" type="number" min="60" max="100" step="1" value="${num(old?.qualityScore)}" placeholder="如 85"></label></div>
         <p class="rhythm-caption">来自手环分期的填写越全，综合评分越准；主观质量分占比 60%。</p>
       </details>
       <div class="rhythm-sleep-kind"><label for="rh-sleep-kind">类型</label><select id="rh-sleep-kind" name="kind"><option value="main" ${(old?.kind || this.sleepKind) === 'main' ? 'selected' : ''}>主要睡眠</option><option value="nap" ${(old?.kind || this.sleepKind) === 'nap' ? 'selected' : ''}>午睡 / 小睡</option></select></div>
-      <label class="rhythm-check"><input name="complete" type="checkbox" ${!old || this.data().completeDays[this.selectedDay]?.sleep ? 'checked' : ''}>这一天结束的睡眠已录全（含午睡）</label>
+      <label class="rhythm-check"><input name="complete" type="checkbox" ${this.data().completeDays[this.selectedDay]?.sleep ? 'checked' : ''}>这一天结束的睡眠已录全（含午睡）</label>
       <p id="rh-sleep-error" class="rhythm-error" role="alert"></p>
       <div class="rhythm-sleep-buttons"><button class="btn primary small" type="submit" id="rh-sleep-save">${old ? '更新睡眠记录' : '保存睡眠记录'}</button>${old ? '<button class="btn small ghost" type="button" id="rh-sleep-delete">删除记录</button>' : ''}</div>
     </form>`;
@@ -284,10 +382,19 @@ const Rhythm = {
     const form = $('#rh-sleep-form', root), old = this.data().sleeps.find(s => s.id === this.formSleepId);
     const dateNote = () => {
       const input = RhythmEngine.sleepInput(this.selectedDay, form.elements.bed.value, form.elements.wake.value);
-      $('#rh-sleep-dates', form).textContent = input ? `${input.startLocal.slice(5, 10)} 入睡 → ${input.endLocal.slice(5, 10)} 起床 · 跨夜日期自动处理` : '填写两个时间后，会自动显示对应日期。';
+      if (!input) { $('#rh-sleep-dates', form).textContent = '填写两个时间后，会自动显示对应日期与时长。'; return; }
+      const span = (Date.parse(input.endLocal) - Date.parse(input.startLocal)) / 60000;
+      const awake = form.elements.awakeMin.value === '' ? null : Number(form.elements.awakeMin.value);
+      $('#rh-sleep-dates', form).textContent = `${input.startLocal.slice(5, 10)} 入睡 → ${input.endLocal.slice(5, 10)} 起床 · 时间跨度：${this.duration(span)}${awake != null ? ` − 夜间清醒 ${this.duration(awake)} = 累计睡眠 ${this.duration(span - awake)}` : ''} · 统计采用：${awake != null ? '时间跨度 − 夜间清醒' : '按时间差估算'}`;
     };
-    form.elements.bed.oninput = dateNote; form.elements.wake.oninput = dateNote; dateNote();
-    form.elements.kind.onchange = e => { this.sleepKind = e.target.value; this.sleepEditId = undefined; this.refresh(); };
+    form.elements.awakeMin.oninput = dateNote; form.elements.bed.oninput = dateNote; form.elements.wake.oninput = dateNote; dateNote();
+    form.elements.kind.onchange = e => {
+      /* 切类型前把已填的入睡/起床时间带过去——刷新会重建表单，不能让用户重打 */
+      this._pendingSleepForm = { bed: form.elements.bed.value, wake: form.elements.wake.value };
+      this.sleepKind = e.target.value;
+      this.sleepEditId = undefined;
+      this.refresh();
+    };
     if (old) $('#rh-sleep-delete', form).onclick = async e => {
       const button = e.currentTarget;
       if (button.dataset.armed !== 'true') { button.dataset.armed = 'true'; button.textContent = '确认删除'; return; }
@@ -300,24 +407,63 @@ const Rhythm = {
     };
     form.onsubmit = async e => {
       e.preventDefault();
-      const hours = form.elements.hours.value, minutes = form.elements.minutes.value;
-      const recordedMinutes = hours === '' && minutes === '' ? null : Number(hours || 0) * 60 + Number(minutes || 0);
+      /* 累计睡眠 = 起床 − 入睡 − 夜间清醒总时间；不再手动填睡眠时长。
+         个人积累库导入的历史记录自带手环时长，未填清醒时间时保留，避免降低既有数据质量。 */
       const optInt = name => { const v = form.elements[name].value; return v === '' ? null : Number(v); };
-      const input = RhythmEngine.sleepInput(this.selectedDay, form.elements.bed.value, form.elements.wake.value, recordedMinutes, old?.id);
+      const awakeMinutes = optInt('awakeMin');
+      const recordedMinutes = awakeMinutes == null ? (old?.recordedMinutes ?? null) : null;
+      const input = RhythmEngine.sleepInput(this.selectedDay, form.elements.bed.value, form.elements.wake.value, recordedMinutes, old?.id, awakeMinutes);
       const error = !input ? '请填写不同的入睡和起床时间。' : RhythmEngine.validateSleep(input, this.data());
       if (error) { $('#rh-sleep-error', form).textContent = error; return; }
       const a = RhythmEngine.parse(input.startLocal), b = RhythmEngine.parse(input.endLocal);
       $('#rh-sleep-save', form).disabled = true;
+      const isMain = form.elements.kind.value === 'main';
       const ok = await this.commit(d => {
-        const record = { ...old, id: old?.id || uid('sleep'), kind: form.elements.kind.value, start: a.iso, startLocal: a.local, startOffset: a.offset, end: b.iso, endLocal: b.local, endOffset: b.offset, recordedMinutes, source: old?.source === 'lifepivot' ? 'lifepivot' : 'manual-band',
+        const record = { ...old, id: old?.id || uid('sleep'), kind: form.elements.kind.value, start: a.iso, startLocal: a.local, startOffset: a.offset, end: b.iso, endLocal: b.local, endOffset: b.offset, recordedMinutes, awakeMinutes, source: recordedMinutes == null ? 'time-estimate' : old?.source === 'lifepivot' ? 'lifepivot' : 'manual-band',
           deepMinutes: optInt('deepMin'), lightMinutes: optInt('lightMin'), remMinutes: optInt('remMin'),
           awakeEpisodes: optInt('awakeEp'), morningFeeling: optInt('feeling'), qualityScore: optInt('qScore') };
         if (old) d.sleeps[d.sleeps.findIndex(s => s.id === old.id)] = record; else d.sleeps.push(record);
         this.invalidate(d, (old?.endLocal || old?.startLocal)?.slice(0, 10), 'sleep');
         d.completeDays[this.selectedDay] = { ...d.completeDays[this.selectedDay], sleep: form.elements.complete.checked };
-      }, '睡眠记录已保存');
-      if (ok) { this.sleepEditId = undefined; this.sleepKind = form.elements.kind.value; this.refresh(); }
+      }, isMain ? '睡眠记录已保存 · 今晚入睡建议已更新' : '睡眠记录已保存');
+      if (ok) { this.sleepEditId = undefined; this.sleepKind = form.elements.kind.value; if(App.currentView==='nutrition')this.refresh();else App.render(); }
       else $('#rh-sleep-save', form).disabled = false;
     };
+  },
+  /* 今晚入睡建议卡：早上记录主睡眠后生成（RhythmEngine.sleepAdvice 纯函数）。
+     支持「明早定时起床」覆盖：填了时间就按该起床点重算（仅当天有效，存 db.rhythm.tomorrowWake）。 */
+  wakeOverride() {
+    const ow = this.data().tomorrowWake;
+    return ow && ow.date === todayKey() && /^\d{2}:\d{2}$/.test(ow.time || '') ? ow.time : '';
+  },
+  sleepAdviceHtml() {
+    const overrideTime = this.wakeOverride();
+    const options = overrideTime ? { wakeOverrideMinutes: Number(overrideTime.slice(0, 2)) * 60 + Number(overrideTime.slice(3, 5)) } : {};
+    /* 昨日训练组数（跨模板全库聚合）：容量偏高时今晚多留恢复窗口 */
+    try {
+      const st = Store.db.strength || {};
+      const yesterday = addDays(todayKey(), -1);
+      const day = st.days && st.days[yesterday];
+      if (day && day.status !== 'skipped') {
+        let sets = 0;
+        for (const a of day.actions || []) {
+          if (Array.isArray(a.sets)) sets += a.sets.filter((x) => x && x.done).length;
+          else if (typeof a.setsDone === 'number') sets += a.setsDone;
+        }
+        if (sets > 0) options.trainingSetsYesterday = sets;
+      }
+    } catch { /* 训练数据缺失不影响睡眠建议 */ }
+    const advice = RhythmEngine.sleepAdvice(this.data(), new Date(), options);
+    if (!advice) return '';
+    const hrs = m => `${Math.floor(m / 60)} 小时${m % 60 ? ` ${Math.round(m % 60)} 分` : ''}`;
+    return `<div class="rhythm-sleep-advice" role="status" style="margin:12px 0; padding:12px 14px; border:1px solid rgba(91,141,239,.35); background:rgba(91,141,239,.07); border-radius:12px; font-size:12.5px; color:#53667b">
+      <strong style="font-size:13.5px; color:#2f4257">🌙 今晚入睡建议：${esc(advice.bedtime)} 上床</strong>
+      <p style="margin:4px 0 6px">按明早 <b>${esc(advice.wake)}</b> 起床 · 卧床约 <b>${hrs(advice.opportunityMinutes)}</b>（≈ ${advice.cycles} 个睡眠周期，周期长度因人而异，仅作参考）· 预留 15 分钟入睡</p>
+      <ul style="margin:4px 0 6px; padding-left:18px; display:grid; gap:3px">${advice.reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul>
+      <label style="display:inline-flex; align-items:center; gap:6px; margin:2px 0 4px">明早定时起床？
+        <input id="rh-adv-wake" type="time" value="${esc(overrideTime)}" style="padding:4px 8px; border:1px solid rgba(83,102,123,.35); border-radius:8px; background:transparent; color:inherit; font:inherit">
+      </label><span class="rhythm-caption">（如明天要早起，填写后按该时间重算；清空即恢复）</span>
+      <p style="margin:2px 0 0; opacity:.8">${esc(advice.disclaimer)}</p>
+    </div>`;
   }
 };

@@ -1,14 +1,12 @@
-/* 真实模块计时测试：require 真实 strength.js，调用真实的
-   Strength._ensureTimerFor / _flushTimer / tick / _saveActual（含 openModal 弹窗处理器），
-   只 stub 环境全局（Store/App/$/…）与可控时钟 Core.businessDate。
-   不把任何被测实现复制进测试。 */
+/* 力量训练记录页已去掉秒表。这里确认页面不再暴露 tick / _flushTimer / _ensureTimerFor，
+   保存与收尾仍只写组数、次数、负重；旧的 totalSeconds / confirmedDurationMinutes 不被这次保存改写。
+   只 stub 环境全局（Store/App/$/…）。不把被测实现复制进测试。 */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const Core = require('../src/js/strength-core');
 const Strength = require('../src/js/strength');
 
 const TODAY = '2026-09-13';
-const TOMORROW = '2026-09-14';
 const NOW = new Date('2026-09-13T01:00:00.000Z');
 
 /* ---------- 环境全局 stub（只提供浏览器环境，不含任何被测逻辑） ---------- */
@@ -84,99 +82,42 @@ function seedToday() {
   const r = Core.startTraining(state, { date: TODAY }, NOW);
   assert.ok(r.ok, r.error);
   Strength.ui = { tab: 'today', muscle: null, date: null, historyPage: 1, tplDraft: null };
-  Strength.timer = null;
-  Strength._ensureTimerFor(Core.dayRecord(state, TODAY), TODAY);
   return Core.dayRecord(state, TODAY);
 }
 
-test('真实 tick：每秒累计，30 秒周期经真实 _flushTimer 落盘', () => {
-  const day = seedToday();
-  for (let i = 0; i < 35; i++) Strength.tick();
-  assert.equal(day.totalSeconds, 30, '30 秒周期真实落盘一次');
-  assert.equal(Strength.timer.seconds, 5, '落盘后从 0 续计');
-  assert.equal(Strength.timer.running, true);
+test('力量训练页不再暴露秒表方法', () => {
+  assert.equal(typeof Strength.tick, 'undefined');
+  assert.equal(typeof Strength._flushTimer, 'undefined');
+  assert.equal(typeof Strength._ensureTimerFor, 'undefined');
+  assert.equal(Object.hasOwn(Strength, 'timer'), false);
 });
 
-test('P1-1 真实 _saveActual：保存后秒表继续走，无双计不丢秒', async () => {
+test('保存实际数据只写组数、次数、负重，不改旧时长字段', async () => {
   const day = seedToday();
-  for (let i = 0; i < 30; i++) Strength.tick();      // 周期落盘 30s
-  for (let i = 0; i < 5; i++) Strength.tick();       // 未落盘 5s
-  await Strength._saveActual(saveRoot(), day, false); // 真实保存（内部先 flush 再 ensure）
-  assert.equal(day.totalSeconds, 35, '保存前未落盘的 5 秒一并落盘');
-  assert.equal(Strength.timer.running, true, '保存后秒表继续走');
-  assert.equal(Strength.timer.seconds, 0, '从 0 续计，不双计');
-  for (let i = 0; i < 10; i++) Strength.tick();
-  // 界面显示总量 = 已落盘 + 当前秒表（10 秒还在秒表里，未到 30 秒周期）
-  assert.equal(day.totalSeconds + Strength.timer.seconds, 45, '保存后再走 10 秒正确累计');
-  assert.equal(day.totalSeconds, 35, '落盘值不被重复累计');
-});
-
-test('P1-1 暂停后保存：保持暂停，秒表不恢复不累计', async () => {
-  const day = seedToday();
-  for (let i = 0; i < 10; i++) Strength.tick();
-  // 真实暂停按钮处理器的完整接线：先落秒 → pauseTraining → ensure
-  Strength._flushTimer();
-  Core.pauseTraining(state, { date: TODAY }, NOW);
-  Strength._ensureTimerFor(Core.dayRecord(state, TODAY), TODAY);
-  assert.equal(Strength.timer.running, false, '暂停即停表');
+  day.totalSeconds = 90;
+  day.confirmedDurationMinutes = 45;
   await Strength._saveActual(saveRoot(), day, false);
-  assert.equal(Strength.timer.running, false, '暂停态保存后不恢复走秒');
-  const before = day.totalSeconds;
-  Strength.tick();
-  Strength.tick();
-  assert.equal(day.totalSeconds, before, '暂停期间 tick 不累计');
+  const saved = Core.dayRecord(state, TODAY);
+  assert.equal(saved.actions[0].setsDone, 4);
+  assert.equal(saved.actions[0].repsText, '10');
+  assert.equal(saved.actions[0].weightKg, 40);
+  assert.equal(saved.totalSeconds, 90);
+  assert.equal(saved.confirmedDurationMinutes, 45);
 });
 
-test('P1-1 取消收尾弹窗：训练仍在进行，秒表恢复', async () => {
-  const day = seedToday();
-  for (let i = 0; i < 12; i++) Strength.tick();
-  await Strength._saveActual(saveRoot(), day, true); // withFinish → 弹窗
+test('取消收尾弹窗：训练仍在进行', async () => {
+  seedToday();
+  await Strength._saveActual(saveRoot(), Core.dayRecord(state, TODAY), true);
   assert.ok(lastModal, '应弹出收尾弹窗');
-  modalCard.querySelector('#st-fin-cancel').onclick(); // 真实取消处理器
-  assert.equal(Strength.timer.running, true, '取消收尾后秒表恢复');
+  modalCard.querySelector('#st-fin-cancel').onclick();
   assert.equal(Core.dayRecord(state, TODAY).status, 'in-progress');
+  assert.equal(Core.dayRecord(state, TODAY).totalSeconds, 0);
 });
 
-test('P1-1 完成收尾：秒表清空并轮转', async () => {
-  const day = seedToday();
-  for (let i = 0; i < 5; i++) Strength.tick();
-  await Strength._saveActual(saveRoot(), day, true);
+test('完成收尾并轮转，不依赖秒表', async () => {
+  seedToday();
+  await Strength._saveActual(saveRoot(), Core.dayRecord(state, TODAY), true);
   modalCard.querySelector('#st-fin-ok').onclick();
-  assert.equal(Strength.timer, null);
   assert.equal(Core.dayRecord(state, TODAY).status, 'completed');
-});
-
-test('切日期边界：真实 _flushTimer 把秒数落回拥有日期，另一日期不受污染', () => {
-  const day = seedToday();
-  for (let i = 0; i < 25; i++) Strength.tick();
-  Strength._flushTimer(); // _bindDateNav.set 切日期前的真实调用
-  assert.equal(day.totalSeconds, 25);
-  Strength.timer = null;
-  assert.equal(Object.keys(state.days).length, 1, '不产生其他日期的记录');
-});
-
-test('午夜边界（可控时钟）：零点前未落盘秒数保留在原日期，零点后不写回', () => {
-  const day = seedToday();
-  clockDate = TODAY;
-  for (let i = 0; i < 20; i++) Strength.tick(); // 零点前累计 20 秒，未到 30 秒周期，未落盘
-  assert.equal(day.totalSeconds, 0);
-  clockDate = TOMORROW;                          // 跨零点
-  Strength.tick();                               // 跨零点后第一 tick
-  assert.equal(day.totalSeconds, 20, '零点前累计的 20 秒保留在原日期');
-  assert.equal(Strength.timer.running, false, '跨零点后停表');
-  assert.equal(state.days[TOMORROW], undefined, '零点后时间不写进新日期');
-  Strength.tick();
-  Strength.tick();
-  assert.equal(day.totalSeconds, 20, '停表后不再累计');
-  clockDate = TODAY;
-});
-
-test('补记防线：过去日期没有 timer（真实 ensure 不启动秒表）', () => {
-  bootWith(freshState());
-  Strength.timer = null;
-  Core.selectCycleDay(state, { templateId: state.templates[0].id, dayKey: 'push' }, NOW);
-  Core.startTraining(state, { date: '2026-09-12' }, NOW);
-  Strength._ensureTimerFor(Core.dayRecord(state, '2026-09-12'), TODAY);
-  assert.equal(Strength.timer, null);
-  assert.equal(state.days['2026-09-12'].totalSeconds, 0);
+  assert.equal(Core.dayRecord(state, TODAY).totalSeconds, 0);
 });

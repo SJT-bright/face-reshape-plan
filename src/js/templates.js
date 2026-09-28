@@ -192,9 +192,14 @@ const PlanImporter = {
       if (b2) out.videoRef = { type: 'bv', val: b2[0] };
       else if (a2) out.videoRef = { type: 'av', val: a2[1] };
     }
+    // 只有视频链接的行只加入视频库，不凭空创建一个默认时间的训练安排。
+    out.videoOnly = !!out.videoRef && !s
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/BV[0-9A-Za-z]{10}/g, '')
+      .replace(/av\d{3,}/gi, '').trim();
 
-    // 时间
-    const tm = s.match(/([01]?\d|2[0-3])[:：]([0-5]\d)/);
+    // 时间：必须是合法 HH:MM（0-23:0-59），不从 25:30 这类非法串里捞尾巴
+    const tm = s.match(/(?<!\d)([01]?\d|2[0-3])[:：]([0-5]\d)(?!\d)/);
     if (tm) out.time = pad2(+tm[1]) + ':' + tm[2];
 
     // 时长
@@ -224,6 +229,7 @@ const PlanImporter = {
       .replace(/(?<!^)周[一二三四五六日天]/g, '')
       .replace(/[｜|,，;；:：]+\s*$/g, '')
       .replace(/\s{2,}/g, ' ')
+      .slice(0, 60) /* 与 UI 输入上限一致，防超长行撑爆布局 */
       .trim() || '瘦脸跟练';
     return out;
   },
@@ -232,8 +238,21 @@ const PlanImporter = {
   async importLines(text, onProgress) {
     const rows = String(text || '').split(/\r?\n/).map(l => this.parseLine(l)).filter(Boolean);
     if (!rows.length) return { sessions: 0, videos: 0 };
+    /* 安排去重和视频去重各自处理：同名同时间的新链接仍需进入视频库。 */
+    const sigOf = (r) => `${r.name}|${r.time || '21:30'}|${(r.days || [0,1,2,3,4,5,6]).join(',')}`;
+    const existing = new Set((Store.db.sessions || []).filter(x => x.enabled !== false).map(x => `${x.name}|${x.time}|${(x.days || []).join(',')}`));
+    const seen = new Set();
+    const newSessions = [];
+    let skipped = 0;
+    for (const r of rows) {
+      if (r.videoOnly) continue;
+      const sig = sigOf(r);
+      if (existing.has(sig) || seen.has(sig)) { skipped++; continue; }
+      seen.add(sig);
+      newSessions.push(r);
+    }
 
-    // 先导入缺失的视频
+    // 从所有输入行导入视频，包括安排已存在或同批安排重复的行。
     const needFetch = [];
     for (const r of rows) {
       if (!r.videoRef) continue;
@@ -244,14 +263,21 @@ const PlanImporter = {
       else needFetch.push(r);
     }
     let vi = 0;
+    let importedVideos = 0;
     for (const r of needFetch) {
       vi++;
+      /* 同批两行同 BV：先拉的那条入库后，后续行直接复用，不再重复请求与入库 */
+      const dup = Store.db.videos.find(v =>
+        (r.videoRef.type === 'bv' && v.bvid === r.videoRef.val) ||
+        (r.videoRef.type === 'av' && v.aid === r.videoRef.val));
+      if (dup) { r.videoId = dup.id; continue; }
       if (onProgress) onProgress(vi, needFetch.length, `获取视频信息：${r.videoRef.val}`);
       const info = await window.native.fetchBilibiliInfo(r.videoRef.type === 'bv' ? r.videoRef.val : ('av' + r.videoRef.val));
       const v = {
         id: uid('vid'), source: 'bilibili',
         bvid: r.videoRef.type === 'bv' ? r.videoRef.val : null,
         aid: r.videoRef.type === 'av' ? r.videoRef.val : null, page: 1,
+        cid: (info && info.ok) ? (info.cid || null) : null,
         title: (info && info.ok) ? info.title : r.videoRef.val,
         pic: (info && info.ok) ? info.pic : '',
         durationSec: (info && info.ok) ? info.durationSec : null,
@@ -259,11 +285,12 @@ const PlanImporter = {
       };
       Store.db.videos.push(v);
       r.videoId = v.id;
+      importedVideos++;
     }
 
     // 建会话（默认时间 21:30，默认每天）
     let si = 0;
-    for (const r of rows) {
+    for (const r of newSessions) {
       si++;
       if (onProgress) onProgress(si, rows.length, `创建安排：${r.name}`);
       Store.db.sessions.push({
@@ -275,7 +302,7 @@ const PlanImporter = {
         enabled: true
       });
     }
-    Store.save(true);
-    return { sessions: rows.length, videos: needFetch.length };
+    if (importedVideos || newSessions.length) Store.save(true);
+    return { sessions: newSessions.length, videos: importedVideos, skipped };
   }
 };

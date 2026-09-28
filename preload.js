@@ -4,6 +4,16 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('native', {
+  reminderList: () => ipcRenderer.invoke('reminder:list'),
+  reminderAction: (id,action) => ipcRenderer.invoke('reminder:action',id,action),
+  keyStatus: () => ipcRenderer.invoke('key:status'),
+  saveApiKey: key => ipcRenderer.invoke('key:save', key),
+  backupStatus: () => ipcRenderer.invoke('backup:status'),
+  exportBackup: includeVideos => ipcRenderer.invoke('backup:export', includeVideos),
+  inspectBackup: () => ipcRenderer.invoke('backup:inspect'),
+  restoreBackup: () => ipcRenderer.invoke('backup:restore'),
+  videoExists: p => ipcRenderer.invoke('video:exists', p),
+  onShortcut: cb => ipcRenderer.on('app:shortcut', (_e,action) => cb(action)),
   loadData: () => ipcRenderer.invoke('data:load'),
   saveData: (data) => ipcRenderer.invoke('data:save', data),
   saveDataSync: (data) => ipcRenderer.sendSync('data:save-sync', data),
@@ -15,11 +25,27 @@ contextBridge.exposeInMainWorld('native', {
   openDataFolder: () => ipcRenderer.invoke('app:openDataFolder'),
   userDataPath: () => ipcRenderer.invoke('app:userDataPath'),
   importLifepivotSleep: () => ipcRenderer.invoke('lifepivot:importSleep'),
-  saveSkinPhoto: (buf, ext) => ipcRenderer.invoke('skinphoto:save', buf, ext),
-  readSkinPhoto: (name) => ipcRenderer.invoke('skinphoto:read', name),
-  deleteSkinPhoto: (name) => ipcRenderer.invoke('skinphoto:delete', name),
+  saveSkinPhoto: (buf, ext, meta) => ipcRenderer.invoke('skinphoto:save', buf, ext, meta),
+  readSkinPhoto: (name, kind) => ipcRenderer.invoke('skinphoto:read', name, kind),
+  deleteSkinPhoto: (name, kind) => ipcRenderer.invoke('skinphoto:delete', name, kind),
+  openPhotoFolder: (kind) => ipcRenderer.invoke('skinphoto:openFolder', kind),
+  photoFolderInfo: (kind) => ipcRenderer.invoke('skinphoto:folderInfo', kind),
+  listSkinPhotos: (known, kind, date) => ipcRenderer.invoke('skinphoto:list', known, kind, date),
+  openMediaRoot: () => ipcRenderer.invoke('media:openRoot'),
+  openVideoFolder: () => ipcRenderer.invoke('video:openFolder'),
+  listNewVideos: (known) => ipcRenderer.invoke('video:listNew', known),
   analyzeSkinPhoto: (b64, mime, apiKey, model) => ipcRenderer.invoke('ai:analyzeSkin', b64, mime, apiKey, model),
+  parsePlanAI: (text, apiKey, model) => ipcRenderer.invoke('ai:parsePlan', text, apiKey, model),
   isMac: process.platform === 'darwin',
   platform: process.platform,
-  onReminderActivate: (cb) => ipcRenderer.on('reminder-activate', (_e, payload) => cb(payload))
+  onReminderActivate: (cb) => ipcRenderer.on('reminder-activate', (_e, payload) => cb(payload)),
+  // 内嵌媒体控制桥（B 站播放器在跨域 iframe 内，须由主进程注入控制）+ 兜底可见性事件
+  pauseEmbeddedMedia: () => ipcRenderer.invoke('media:embeddedPause'),
+  resumeEmbeddedMedia: () => ipcRenderer.invoke('media:embeddedResume'),
+  embeddedMediaStatus: () => ipcRenderer.invoke('media:embeddedStatus'),
+  onAppVisibility: (cb) => ipcRenderer.on('app-visibility', (_e, payload) => cb(payload)),
+  // 中控提示器远程动作：主进程转发 → 渲染端执行 → 回执（详见 src/js/hub-actions.js）
+  onHubAction: (cb) => ipcRenderer.on('hub:action', (_e, payload) => cb(payload)),
+  hubActionDone: (result) => ipcRenderer.send('hub:action-done', result),
+  hubActionReady: () => ipcRenderer.send('hub:ready')
 });
