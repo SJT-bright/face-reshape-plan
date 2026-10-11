@@ -55,8 +55,8 @@ async function main() {
   const pkg = JSON.parse(asar.extractFile(archive, 'package.json'));
   assert.equal(pkg.version, report.version);
   const files = ['main.js', 'preload.js', ...fs.readdirSync(path.join(root, 'src/js')).filter(n => n.endsWith('.js')).map(n => 'src/js/' + n), 'src/index.html', 'src/ux.css'];
-  for (const name of files) assert.equal(hash(asar.extractFile(archive, name)), hash(fs.readFileSync(path.join(root, name))), name + ' matches source');
-  const packaged = asar.listPackage(archive);
+  for (const name of files) assert.equal(hash(asar.extractFile(archive, path.normalize(name))), hash(fs.readFileSync(path.join(root, name))), name + ' matches source');
+  const packaged = asar.listPackage(archive).map(name => name.replace(/\\/g, '/'));
   assert.equal(packaged.some(n => /(?:face-reshape-data\.json|ai-key\.enc|hub-meal-token|\.sqlite|\.frbackup|\/\.zcode\/)/.test(n)), false);
   report.checks.push('package version, ' + files.length + ' source hashes, no private records');
   const clip = path.join(profile, '测试 视频 #1.webm');
