@@ -54,7 +54,10 @@ function save(validated,dir) {
     fs.fsyncSync(descriptor);
     fs.closeSync(descriptor);descriptor=undefined;
     try {fs.linkSync(temporary,target);}catch(error){if(error.code!=='EEXIST')throw error;verify();}
-    const folder=fs.openSync(dir,'r');try{fs.fsyncSync(folder);}finally{fs.closeSync(folder);}
+    // Windows 不支持对目录句柄 fsync；照片文件已先 fsync，硬链接仍保持不覆盖的原子写入。
+    if(process.platform!=='win32'){
+      const folder=fs.openSync(dir,'r');try{fs.fsyncSync(folder);}finally{fs.closeSync(folder);}
+    }
     return photo;
   }finally{
     if(descriptor!==undefined)fs.closeSync(descriptor);

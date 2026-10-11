@@ -30,8 +30,8 @@ function planInput(overrides) {
 }
 
 test('业务日期按本地时区归日（与全应用口径一致；UTC+8 下即上海日期）', () => {
-  assert.equal(Core.businessDate(new Date('2026-09-12T15:59:00Z')), '2026-09-12'); // 23:59 上海
-  assert.equal(Core.businessDate(new Date('2026-09-12T16:01:00Z')), '2026-09-13'); // 次日 00:01 上海
+  assert.equal(Core.businessDate(new Date(2026, 8, 12, 23, 59)), '2026-09-12');
+  assert.equal(Core.businessDate(new Date(2026, 8, 13, 0, 1)), '2026-09-13');
   assert.ok(Core.isBusinessDate('2026-02-29') === false);
   assert.ok(Core.isBusinessDate('2028-02-29') === true);
 });
