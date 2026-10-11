@@ -92,7 +92,7 @@ async function main() {
   await start(port);
   const tokenPath = path.join(profile,'hub-meal-token');
   const token = fs.readFileSync(tokenPath,'ascii').trim();
-  assert.equal(fs.statSync(tokenPath).mode & 0o777,0o600);
+  if(process.platform!=='win32')assert.equal(fs.statSync(tokenPath).mode & 0o777,0o600);
   assert.equal((await request(port,'POST','/hub/meal',meal,'f'.repeat(64))).status,403);
   assert.equal((await waitForReady(port,token,meal)).status,200);
   const dataPath = path.join(profile,'face-reshape-data.json');

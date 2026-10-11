@@ -78,3 +78,23 @@ jobs:
           if (('${{ github.ref_type }}' -eq 'tag') -and ('${{ github.ref_name }}' -ne $tag)) { throw 'Tag and package version differ' }
           gh release create $tag --target "${{ github.sha }}" --title "人生重塑计划 $version · Windows / macOS 源码" --notes-file docs/release-notes.md "dist/Life-Reshape-Plan-$version-Windows-x64-Setup.exe" "dist/Life-Reshape-Plan-$version-Windows-x64.zip" dist/SHA256SUMS.txt dist/windows-validation.json
           if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed' }
+      - name: Download and verify published Windows packages
+        if: github.ref_type == 'tag' || (inputs.publish && github.ref == 'refs/heads/main')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $downloadDir = Join-Path $env:RUNNER_TEMP 'life-release-download'
+          gh release download "v$version" --dir $downloadDir --pattern '*Windows-x64*'
+          if ($LASTEXITCODE -ne 0) { throw 'Release download failed' }
+          foreach ($line in Get-Content dist/SHA256SUMS.txt) {
+            $parts = $line -split '\s{2,}', 2
+            $actual = (Get-FileHash (Join-Path $downloadDir $parts[1]) -Algorithm SHA256).Hash.ToLower()
+            if ($actual -ne $parts[0]) { throw "Downloaded checksum mismatch: $($parts[1])" }
+          }
+          $unpacked = Join-Path $env:RUNNER_TEMP 'life-release-extracted'
+          Expand-Archive -Path "$downloadDir/Life-Reshape-Plan-$version-Windows-x64.zip" -DestinationPath $unpacked
+          npm run test:release -- "$unpacked/人生重塑计划.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'Downloaded ZIP executable failed' }
+          Write-Output 'PUBLISHED_WINDOWS_DOWNLOAD_PASS: both file hashes match; downloaded ZIP executable passed native tests'
