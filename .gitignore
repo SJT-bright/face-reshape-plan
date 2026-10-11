@@ -49,3 +49,21 @@ PRODUCT.md
 ai-key.enc
 ai-key.enc.tmp
 restore-before-*/
+
+# Private local integrations, capture artifacts and imported personal media
+.zcode/
+.zcodeignore
+AGENT_PROGRESS.md
+本地视频预览/
+饮食照片/
+meal-photos/
+hub-meal-token*
+notification-test.jsonl
+release-evidence/
+docs/accept-*.md
+docs/dev-*.md
+docs/*-evidence/
+docs/zcode-*
+docs/*-acceptance-*.md
+docs/face-install-recovery-*
+docs/video-period-filter-investigation-*

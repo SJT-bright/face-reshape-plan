@@ -311,3 +311,28 @@ test('快速打卡：只填痘/肤感/整体，评分含推导且显式值优先
   /* 同输入评分稳定（对账可用） */
   assert.equal(E.scoreSkinWithDerived(quick, ctx).score, r.score);
 });
+
+test('R3 连续两晚：上一晚是醒来日 dateKey-1，不把前天当成昨晚', () => {
+  const nowMs = Date.parse('2026-10-05T10:00:00+08:00');
+  const ended = (endDate, minutes) => {
+    const end = `${endDate}T07:00:00+08:00`;
+    const startMs = Date.parse(end) - minutes * 60000;
+    const startAt = new Date(startMs + 8 * 3600000);
+    const p = (n) => String(n).padStart(2, '0');
+    return {
+      start: new Date(startMs).toISOString(),
+      end,
+      startLocal: `${startAt.getUTCFullYear()}-${p(startAt.getUTCMonth() + 1)}-${p(startAt.getUTCDate())}T${p(startAt.getUTCHours())}:${p(startAt.getUTCMinutes())}`,
+      endLocal: `${endDate}T07:00`,
+      kind: 'main'
+    };
+  };
+  const predict = (sleeps) => E.predictForDate({
+    dateKey: '2026-10-05', nowMs, sleeps, meals: [], logs: { '2026-10-04': { barrier: 0 } }
+  });
+  const streak = (r) => r.items.some((item) => String(item.title).includes('连续两晚'));
+  /* 10-03 短、10-04 够、10-05 短：今晨不足，但上一晚（10-04）够，不应报连续两晚 */
+  assert.equal(streak(predict([ended('2026-10-03', 300), ended('2026-10-04', 480), ended('2026-10-05', 300)])), false);
+  /* 10-04 与 10-05 都短：应报 */
+  assert.equal(streak(predict([ended('2026-10-04', 300), ended('2026-10-05', 300)])), true);
+});

@@ -10,7 +10,7 @@ app.commandLine.appendSwitch('disk-cache-dir', path.join(profile, 'cache'));
 const file = path.join(profile, 'face-reshape-data.json');
 const screenshots = path.join(__dirname, '..', '.impeccable', 'review');
 fs.mkdirSync(screenshots, { recursive: true });
-if (phase === 'write') fs.writeFileSync(file, JSON.stringify({ version: 1, settings: { keepInTray: false, eveningReviewTime: '00:00' }, sessions: [], videos: [], skincare: { cycles: [] }, logs: { training: { '2020-01-01': { seconds: 42, entries: [] } }, skincare: {} }, sentinel: 'preserve-me' }));
+if (phase === 'write') fs.writeFileSync(file, JSON.stringify({ version: 1, settings: { keepInTray: false, eveningReviewTime: '', remindersEnabled:false }, sessions: [], videos: [], skincare: { cycles: [] }, logs: { training: { '2020-01-01': { seconds: 42, entries: [] } }, skincare: {} }, sentinel: 'preserve-me' }));
 let done = false;
 app.on('browser-window-created', (_e, win) => {
   if (done) return; done = true;
@@ -29,22 +29,22 @@ app.on('browser-window-created', (_e, win) => {
         assert.equal(await js('Store.db.rhythm.meals.length'), 0);
         await new Promise(r => setTimeout(r, 400));
         fs.writeFileSync(path.join(screenshots, 'nutrition-empty-1240.png'), (await win.webContents.capturePage()).toPNG());
-        await js("Rhythm.selectedDay = addDays(todayKey(), -1); Rhythm.refresh(); document.querySelector('#rh-meal').click(); document.querySelector('[name=time]').value = Rhythm.selectedDay + 'T19:00'; document.querySelector('#rh-form').requestSubmit();");
+        await js("Rhythm.selectedDay = addDays(todayKey(), -1); Rhythm.refresh(); document.querySelector('#rh-meal').click(); document.querySelector('[name=time]').value = todayKey() + 'T00:02'; document.querySelector('#rh-form').requestSubmit();");
         await wait("!Rhythm.busy && Store.db.rhythm.meals.length === 1 && document.querySelector('#modal-mask').classList.contains('hidden')");
         assert.equal(record().rhythm.meals.length, 1);
         assert.ok(fs.existsSync(path.join(profile, 'hub-today.json')), 'hub export must stay inside the isolated profile');
-        await js("document.querySelector('[data-meal]').click(); document.querySelector('[name=time]').value = Rhythm.selectedDay + 'T18:30'; document.querySelector('#rh-form').requestSubmit();");
-        await wait("!Rhythm.busy && Store.db.rhythm.meals[0].local.endsWith('18:30')");
+        await js("document.querySelector('[data-meal]').click(); document.querySelector('[name=time]').value = Rhythm.selectedDay + 'T00:01'; document.querySelector('#rh-form').requestSubmit();");
+        await wait("!Rhythm.busy && Store.db.rhythm.meals[0].local.endsWith('00:01')");
         assert.equal(await js("!!document.querySelector('#rh-sleep-now, #rh-sleep')"), false);
-        // 新规格：时长不再手动输入——hours/minutes 输入框已移除，时长按入睡→起床自动记录
-        assert.equal(await js("!!document.querySelector('#rh-sleep-form [name=hours]')"), false);
-        assert.ok(await js("document.querySelector('#rh-sleep-dates').textContent.includes('按时间差估算')"));
-        await js("document.querySelector('#rh-sleep-form [name=bed]').value='23:00'; document.querySelector('#rh-sleep-form [name=wake]').value='07:00'; document.querySelector('#rh-sleep-form [name=complete]').checked=true; document.querySelector('#rh-sleep-form').requestSubmit();");
+        // Only total duration and score are editable; timestamps/stages remain historical data.
+        assert.equal(await js("document.querySelector('#rh-sleep-form [name=hours]').readOnly"), true);
+        assert.equal(await js("document.querySelector('#rh-sleep-form [name=bed]')"), null);
+        await js("document.querySelector('#rh-sleep-form [name=hours]').value='8';document.querySelector('#rh-sleep-form [name=minutes]').value='0';document.querySelector('#rh-sleep-form [name=qScore]').value='85';document.querySelector('#rh-sleep-form [name=complete]').checked=true;document.querySelector('#rh-sleep-form').requestSubmit();");
         await wait("!Rhythm.busy && Store.db.rhythm.sleeps.length === 1 && document.querySelector('#modal-mask').classList.contains('hidden')");
         await js("document.querySelector('#rh-complete-meals').click()"); await wait('!Rhythm.busy');
-        assert.equal(record().rhythm.sleeps[0].recordedMinutes, null);
-        assert.equal(await js("RhythmEngine.sleepMinutes(Store.db.rhythm.sleeps[0])"), 480); // 23:00→07:00 自动派生
-        assert.equal(await js("!!document.querySelector('.rhythm-sleep-advice')"), true); // 今晚入睡建议卡已出现
+        assert.equal(record().rhythm.sleeps[0].recordedMinutes, 480);
+        assert.equal(await js("RhythmEngine.sleepMinutes(Store.db.rhythm.sleeps[0])"), 480); // exact manually confirmed duration
+        assert.equal(await js("!!document.querySelector('.rhythm-sleep-advice')"), false); // no invented bedtime from a duration-only record
         assert.equal(record().rhythm.completeDays[record().rhythm.sleeps[0].endLocal.slice(0,10)].sleep, true);
         // Preserve an unfinished v1.2.0 entry; it must not behave like a live timer.
         await js("Rhythm.commit(d => { const p=RhythmEngine.parse('2026-08-01T15:08');d.sleeps.push({id:'legacy',start:p.iso,startLocal:p.local,end:null,kind:'main'}); }, '')");
@@ -66,23 +66,23 @@ app.on('browser-window-created', (_e, win) => {
       } else {
         assert.equal(await js('Store.db.rhythm.meals.length'), 1);
         assert.equal(await js('Store.db.rhythm.sleeps.length'), 2);
-        assert.equal(await js('Store.db.rhythm.sleeps.find(s => s.end).recordedMinutes'), null);
-        assert.equal(await js("!!document.querySelector('.rhythm-sleep-advice')"), true);
+        assert.equal(await js('Store.db.rhythm.sleeps.find(s => s.durationOnly).recordedMinutes'), 480);
+        assert.equal(await js("!!document.querySelector('.rhythm-sleep-advice')"), false);
         assert.equal(await js('Store.db.rhythm.profile'), 'adult');
-        assert.ok(record().rhythm.meals[0].local.endsWith('18:30'));
+        assert.ok(record().rhythm.meals[0].local.endsWith('00:01'));
         await js("Rhythm.selectedDay = Store.db.rhythm.meals[0].local.slice(0,10);Rhythm.refresh();document.querySelector('[data-meal]').click();document.querySelector('#rh-delete').click();document.querySelector('#rh-delete').click();");
         await wait('!Rhythm.busy && Store.db.rhythm.meals.length === 0');
         assert.equal(record().rhythm.completeDays[Object.keys(record().rhythm.completeDays)[0]].meals, false);
         await js("document.querySelector('#rh-sleep-delete').click();document.querySelector('#rh-sleep-delete').click();");
         await wait('!Rhythm.busy && Store.db.rhythm.sleeps.length === 1');
         assert.equal(record().rhythm.sleeps[0].id, 'legacy');
-        await js("document.querySelector('#rh-sleep-form [name=bed]').value='00:30';document.querySelector('#rh-sleep-form [name=wake]').value='08:00';document.querySelector('#rh-sleep-form').requestSubmit();");
-        await wait('!Rhythm.busy && Store.db.rhythm.sleeps.some(s => s.end)');
-        const savedSleep = record().rhythm.sleeps.find(s => s.end);
+        await js("document.querySelector('#rh-sleep-form [name=hours]').value='7';document.querySelector('#rh-sleep-form [name=minutes]').value='30';document.querySelector('#rh-sleep-form').requestSubmit();");
+        await wait('!Rhythm.busy && Store.db.rhythm.sleeps.some(s => s.durationOnly)');
+        const savedSleep = record().rhythm.sleeps.find(s => s.durationOnly);
         assert.equal(savedSleep.startLocal.slice(0,10), savedSleep.endLocal.slice(0,10));
-        await js("document.querySelector('#rh-sleep-form [name=wake]').value='08:30';document.querySelector('#rh-sleep-form').requestSubmit();");
-        await wait("!Rhythm.busy && Store.db.rhythm.sleeps.some(s => s.endLocal?.endsWith('08:30'))");
-        assert.equal(record().rhythm.sleeps.filter(s => s.end).length, 1);
+        await js("document.querySelector('#rh-sleep-form [name=minutes]').value='45';document.querySelector('#rh-sleep-form').requestSubmit();");
+        await wait("!Rhythm.busy && Store.db.rhythm.sleeps.some(s => s.recordedMinutes===465)");
+        assert.equal(record().rhythm.sleeps.filter(s => s.durationOnly).length, 1);
         assert.equal(await js("!!document.querySelector('#rh-sleep-now, #rh-sleep')"), false);
         await js("document.querySelector('#rh-range').value='30';document.querySelector('#rh-range').dispatchEvent(new Event('change'));");
         assert.equal(await js("document.querySelectorAll('.rhythm-history tbody tr').length"), 30);

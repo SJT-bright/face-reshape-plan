@@ -64,6 +64,24 @@ app.on('browser-window-created', (_, win) => {
         ])};Store.db.sessions=[{id:'today-plan',name:'今日跟练',enabled:true,days:[new Date().getDay()],time:'21:30',videoId:'planned'}];Store.save(true);App.render();`);
       assert.equal(await js("document.querySelector('#ux-home-video-select').value"), 'planned');
       await wait("document.querySelector('.ux-home-video-poster').naturalWidth > 0");
+      await click('#ux-home-video-trigger');
+      await wait("!!document.querySelector('#ux-home-video-menu')");
+      const hoverPoint = await js(`(() => { const r=document.querySelector('[data-video-id="planned"]').getBoundingClientRect(); return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}; })()`);
+      win.webContents.sendInputEvent({ type: 'mouseMove', ...hoverPoint });
+      await wait("document.querySelector('.ux-home-video-preview img')?.naturalWidth > 0");
+      assert.match(await js("document.querySelector('.ux-home-video-preview strong').textContent"), /今日面部跟练/);
+      assert.equal(await js("document.querySelector('#ux-home-video-select').value"), 'planned', 'hover does not switch selection');
+      await shot('home-video-hover-preview');
+      await click('[data-video-id="recent"]');
+      await wait("document.querySelector('#ux-home-video-select').value === 'recent'");
+      assert.equal(await js("document.querySelector('#ux-home-video-select').value"), 'recent');
+      await click('#ux-home-video-trigger');
+      await wait("!!document.querySelector('#ux-home-video-menu')");
+      const noCoverPoint = await js(`(() => { const r=document.querySelector('[data-video-id="recent"]').getBoundingClientRect(); return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}; })()`);
+      win.webContents.sendInputEvent({ type: 'mouseMove', ...noCoverPoint });
+      await wait("document.querySelector('.ux-home-video-preview-empty')?.hidden === false");
+      await click('[data-video-id="planned"]');
+      await wait("document.querySelector('#ux-home-video-select').value === 'planned'");
       for (const width of [1240, 980]) {
         win.setSize(width, width === 1240 ? 820 : 640);
         await pause(200);
@@ -74,6 +92,13 @@ app.on('browser-window-created', (_, win) => {
         assert.deepEqual(bounds, { rightOfActions: true, visible: true, overflow: false });
         await shot('home-video-' + width);
       }
+      await click('#ux-home-video-trigger');
+      await wait("!!document.querySelector('#ux-home-video-menu')");
+      const menuBounds = await js(`(() => { const r=document.querySelector('#ux-home-video-menu').getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight}; })()`);
+      assert.ok(menuBounds.left >= 0 && menuBounds.right <= menuBounds.width && menuBounds.top >= 0 && menuBounds.bottom <= menuBounds.height, 'preview remains inside the window');
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+      await wait("!document.querySelector('#ux-home-video-menu')");
       await js("document.documentElement.classList.add('dark')");
       await shot('home-video-dark-980');
       await js("document.documentElement.classList.remove('dark')");
@@ -88,7 +113,7 @@ app.on('browser-window-created', (_, win) => {
       await js("document.querySelector('#stage video').currentTime=8;App.go('today');");
       assert.match(await js("document.querySelector('#ux-home-video-play').textContent"), /继续跟练/);
       await click('#ux-home-video-play');
-      await wait('Session.active.running');
+      await wait('Session.active?.running');
       assert.equal(await js('Session.active.entryId'), entry, 'continuation retains the entry');
 
       // Selecting a different video updates the displayed and launched identity together.
@@ -116,7 +141,7 @@ app.on('browser-window-created', (_, win) => {
       await js("Session.stop();Store.videoById('recent').pic='data:image/png;base64,invalid';UX.homeVideoChoice={date:todayKey(),id:'recent'};App.go('today');");
       await wait("document.querySelector('.ux-home-video-poster').classList.contains('ph')");
       await click('#ux-home-video-play');
-      await wait('Session.active.running');
+      await wait('Session.active?.running');
       await js("Session.stop();Store.settings().enabledModules=['strength','skincare'];App.go('today')");
       assert.equal(await js("!!document.querySelector('#ux-home-video')"), false);
       assert.deepEqual(await js('homeVideoErrors'), []);

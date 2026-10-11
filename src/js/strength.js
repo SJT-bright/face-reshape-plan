@@ -270,11 +270,20 @@ const Strength = {
               aria-selected="${tab === t.id}">${t.emoji} ${t.label}</button>`).join('')}
         </div>
         ${content}
+        ${tab==='today' ? this._bodyPhotosHtml(date) : ''}
       </div>`;
 
     $$('.st-tab', root).forEach((btn) => {
       btn.onclick = () => { this.ui.tab = btn.dataset.tab; App.render(); };
     });
+    const photoAll=$('#st-photo-all',root);
+    if(photoAll)photoAll.onclick=()=>{Skincare.ui.skinPhotoKind='body';App.go('skincare');$('#sk-skin-photos')?.scrollIntoView({block:'start'});};
+    $$('[data-body-photo]',root).forEach(button=>{button.onclick=()=>{
+      Skincare.ui.skinPhotoKind='body';
+      const idx=Skincare._photoList('body').findIndex(p=>p.id===button.dataset.bodyPhoto);
+      if(idx>=0)Skincare._photoViewer(idx);
+    };});
+    if(typeof Skincare!=='undefined')void Skincare._loadPhotoImgs(root);
     if (tab === 'today') {
       this._bindDateNav(root);
       if (info && info.day) this._bindToday(root, info);
@@ -314,6 +323,11 @@ const Strength = {
     } else if (tab === 'progress') {
       this._bindProgress(root);
     }
+  },
+
+  _bodyPhotosHtml(date) {
+    const photos=(Store.db.skin?.photos || []).filter(p=>p.kind==='body' && p.date===date).slice(-6);
+    return `<div class="card"><div class="rhythm-photo-heading"><h3>健身成果照片</h3><button class="btn small ghost" id="st-photo-all">查看全部健身照片</button></div><p class="hint">微信先说“健身成果照片”再发图，按日期保存在本机。</p>${photos.length ? `<div class="life-photo-grid">${photos.map(p=>`<button class="life-photo-thumb" type="button" data-body-photo="${esc(p.id)}"><img data-photo-file="${esc(p.file)}" data-photo-kind="body" alt="${esc(date)} 健身成果"><span>${p.local ? esc(p.local.slice(11)) : esc(date)}${p.source==='weixin-life-diary'?' · 微信':''}</span></button>`).join('')}</div>` : '<p class="hint">这一天还没有健身成果照片。</p>'}</div>`;
   },
 
   /* ================= 公共：日期导航（今日训练页） ================= */
@@ -501,14 +515,16 @@ const Strength = {
         </h3>
         ${this._belongHtml(state, info)}
         ${info.preview && day.note ? `<div class="hint">${esc(day.note)}</div>` : ''}
-        <p class="hint">填写完成组数、实际次数和负重，点保存写入这一天。负重填数字（kg）；练了但没填重量就按自重记，也可以直接写「自重」。这里不记训练时长。</p>
+        <p class="hint">默认带入初始计划或上次保存值，用上下箭头调整组数、次数和重量。每次保存都会留下变化记录，作为下次的基准。</p>
         <div class="st-table" id="st-actions">
           <div class="st-tr st-th">
             <span>动作</span><span>计划</span><span>完成组</span><span>实际次数</span><span>负重/自重</span><span>上次</span>
           </div>
           ${day.actions.map((a, i) => {
             /* 「上次」列改为 prefill 提示：占位符直接给出上次数据（跨模板全库统一），只改有提升的数字 */
-            const last = Core.lastActual(state, a.name, day.date);
+            const baseline=Core.trainingBaseline(state,a,day.date);
+            const locked=day.status==='completed'||day.status==='skipped';
+            const last = Core.lastActual(state, a.name, day.date, true);
             const lastTxt = last ? `上次 ${last.date.slice(5)}` : '首次';
             const setsPh = last && typeof last.action.setsDone === 'number' ? `上次 ${last.action.setsDone} 组` : '';
             const lastLabel = last ? Core.weightLabelKg(last.action.weightKg) : '';
@@ -519,13 +535,14 @@ const Strength = {
             <div class="st-tr">
               <span class="st-name">${esc(a.name)}${cue ? `<i class="hint">${esc(cue)}</i>` : ''}</span>
               <span class="st-plan">${a.plannedSets} 组 × ${esc(a.plannedRepsText || '?')}${a.plannedWeightText ? ' · ' + esc(a.plannedWeightText) : ''}</span>
-              <span><input class="input st-num" data-idx="${i}" data-key="setsDone" type="number" min="0" max="999" placeholder="${esc(setsPh)}" value="${a.setsDone !== null && a.setsDone !== undefined ? a.setsDone : ''}"></span>
-              <span><input class="input" data-idx="${i}" data-key="repsText" type="text" maxlength="60" placeholder="如 12-15" value="${esc(a.repsText)}"></span>
-              <span><input class="input st-num" data-idx="${i}" data-key="weightKg" type="text" inputmode="decimal" maxlength="12" autocomplete="off" spellcheck="false" placeholder="${esc(weightPh)}" title="填数字（kg）；自重留空或写「自重」" aria-label="负重kg，留空按自重记" value="${a.weightKg === 0 ? '自重' : esc(typeof a.weightKg === 'number' ? a.weightKg : '')}"></span>
+              <span><input class="input st-num" data-idx="${i}" data-key="setsDone" type="number" min="0" max="999" placeholder="${esc(setsPh)}" ${locked?'disabled':''} value="${a.setsDone??baseline.setsDone}"></span>
+              <span><input class="input" data-idx="${i}" data-key="repsText" type="text" maxlength="60" placeholder="如 12-15" ${locked?'disabled':''} value="${esc(a.repsText||baseline.repsText)}"></span>
+              <span><input class="input st-num" data-idx="${i}" data-key="weightKg" type="text" inputmode="decimal" maxlength="12" autocomplete="off" spellcheck="false" placeholder="${esc(weightPh)}" title="填数字（kg）；自重留空或写「自重」" aria-label="负重kg，留空按自重记" ${locked?'disabled':''} value="${(a.weightKg??baseline.weightKg)===0?'自重':esc(a.weightKg??baseline.weightKg)}"></span>
               <span class="st-last">${esc(lastTxt)}</span>
             </div>`;
           }).join('')}
         </div>
+        ${this._adjustmentHistory(state,day.date)}
         <div class="st-supps" style="${S.supps}">
           <div class="st-supps-line" style="${S.suppsLine}">
             <button class="btn st-tri" data-sup="creatineTaken" data-state="${triState(supp.creatineTaken)}" data-no-icon="true">肌酸 · ${triLabel(supp.creatineTaken)}</button>
@@ -539,14 +556,19 @@ const Strength = {
           </div>
         </div>
         <div class="row" style="margin-top:14px">
-          <button class="btn" id="st-prefill" data-no-icon="true">按计划填充</button>
-          <button class="btn primary" id="st-save">保存实际数据</button>
-          <button class="btn green" id="st-finish">✓ 完成并进入下一训练日</button>
-          <button class="btn ghost" id="st-skip">跳过这一天</button>
+          <button class="btn" id="st-prefill" data-no-icon="true"${day.status === 'completed' || day.status === 'skipped' ? ' disabled' : ''}>按计划填充</button>
+          <button class="btn primary" id="st-save"${day.status === 'completed' || day.status === 'skipped' ? ' disabled' : ''}>保存实际数据</button>
+          <button class="btn green" id="st-finish"${day.status === 'completed' || day.status === 'skipped' ? ' disabled' : ''}>✓ 完成并进入下一训练日</button>
+          <button class="btn ghost" id="st-skip"${day.status === 'completed' || day.status === 'skipped' || day.status === 'partial' ? ' disabled' : ''}>跳过这一天</button>
         </div>
       </div>`;
   },
 
+  _adjustmentHistory(state,date){
+    const rows=(state.adjustments||[]).filter(x=>x.date===date).slice(-30).reverse();if(!rows.length)return '';
+    const values=x=>`${x.setsDone??0} 组 × ${x.repsText||0} 次 · ${Core.weightLabelKg(x.weightKg)}`;
+    return `<details class="soft-progress-history"><summary>已保存的变化 · ${rows.length} 条</summary>${rows.map(x=>`<p><b>${esc(x.name)}</b> · ${esc(new Date(x.savedAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}))}<br>${esc(values(x.before))} → ${esc(values(x.after))}</p>`).join('')}</details>`;
+  },
   _belongHtml(state, info) {
     const day = info.day;
     const tpls = state.templates || [];
@@ -613,29 +635,65 @@ const Strength = {
     const state = Store.db.strength;
     const day = info.day;
     this._bindBelong(root, info);
+    $$('#st-actions [data-key]', root).forEach((el) => {
+      el.dataset.orig = el.value;
+      el.addEventListener('input', () => {
+        el.dataset.dirty = el.value === el.dataset.orig ? '' : '1';
+      });
+    });
     const saveBtn = $('#st-save', root);
     if (saveBtn) saveBtn.onclick = () => this._saveActual(root, day, false);
-    /* 一键按计划值填充实际数据（计划写自重的动作填「自重」），改完仍需手动保存 */
+    /* 一键按计划值填充实际数据（计划写自重的动作填「自重」），改完仍需手动保存。
+       表格里已有与计划不同的未保存输入时先弹一次确认，取消则全部手输原样保留（与「按建议填充」同一守卫）。 */
     const prefillBtn = $('#st-prefill', root);
-    if (prefillBtn) prefillBtn.onclick = () => {
-      $$('#st-actions .st-tr', root).forEach((tr) => {
-        if (!tr.querySelector('.st-num')) return;
-        const a = day.actions[Number(tr.querySelector('[data-idx]').dataset.idx)];
-        const set = (key, val) => {
-          const el = tr.querySelector(`[data-key="${key}"]`);
-          if (el) el.value = val;
-        };
-        set('setsDone', a.plannedSets || '');
-        set('repsText', a.plannedRepsText || '');
+    if (prefillBtn) prefillBtn.onclick = async () => {
+      const rows = $$('#st-actions .st-tr', root).filter((tr) => tr.querySelector('.st-num'));
+      /* 计划值 → 输入框字符串；检测与填充共用这一口径，保证「弹不弹确认」和「填什么」永远一致 */
+      const planTargetOf = (a, key) => {
+        if (key === 'setsDone') return a.plannedSets ? String(a.plannedSets) : '';
+        if (key === 'repsText') return a.plannedRepsText || '';
         /* 计划里写「自重」的动作，填充时直接给「自重」文本（保存后记为 0） */
         const pw = Core.parseWeightInput(a.plannedWeightText);
-        let fill = '';
-        if (pw.ok && pw.value !== null) fill = pw.value === 0 ? '自重' : String(pw.value);
-        else if (!pw.ok) {
+        if (pw.ok && pw.value !== null) return pw.value === 0 ? '自重' : String(pw.value);
+        if (!pw.ok) {
           const m = String(a.plannedWeightText || '').match(/\d+(?:\.\d+)?/);
-          if (m) fill = m[0];
+          if (m) return m[0];
         }
-        set('weightKg', fill);
+        return '';
+      };
+      /* 空输入永不冲突；负重按解析值比较，「0」「0kg」「自重」是同一负重，不为此误弹确认 */
+      const sameTarget = (key, cur, target) => {
+        if (cur === target) return true;
+        if (key !== 'weightKg') return false;
+        const curW = Core.parseWeightInput(cur);
+        const tgtW = Core.parseWeightInput(target);
+        return curW.ok && tgtW.ok && curW.value !== null && curW.value === tgtW.value;
+      };
+      const hasConflict = rows.some((tr) => {
+        const a = day.actions[Number(tr.querySelector('[data-idx]').dataset.idx)];
+        if (!a) return false;
+        return ['setsDone', 'repsText', 'weightKg'].some((key) => {
+          const el = tr.querySelector(`[data-key="${key}"]`);
+          const cur = el ? String(el.value).trim() : '';
+          return cur !== '' && !sameTarget(key, cur, planTargetOf(a, key));
+        });
+      });
+      if (hasConflict) {
+        const ok = await confirmModal('覆盖已填写的数据？', '表格里有与计划不同的已填内容，按计划填充会覆盖这些未保存的输入。', '覆盖并填充');
+        if (!ok) return;
+      }
+      rows.forEach((tr) => {
+        const a = day.actions[Number(tr.querySelector('[data-idx]').dataset.idx)];
+        if (!a) return;
+        const set = (key, val) => {
+          const el = tr.querySelector(`[data-key="${key}"]`);
+          if (!el) return;
+          el.value = val;
+          if (el.value !== (el.dataset.orig || '')) el.dataset.dirty = '1';
+        };
+        set('setsDone', planTargetOf(a, 'setsDone'));
+        set('repsText', planTargetOf(a, 'repsText'));
+        set('weightKg', planTargetOf(a, 'weightKg'));
       });
       toast('已按计划填充，改完记得保存');
     };
@@ -906,7 +964,9 @@ const Strength = {
       if (!it || it.mode === 'start') return;
       const set = (key, val) => {
         const el = tr.querySelector(`[data-key="${key}"]`);
-        if (el && val !== null && val !== undefined && val !== '') el.value = val;
+        if (!el || val === null || val === undefined || val === '') return;
+        el.value = val;
+        if (el.value !== (el.dataset.orig || '')) el.dataset.dirty = '1';
       };
       set('setsDone', it.sets);
       set('repsText', it.repsText);
@@ -927,9 +987,31 @@ const Strength = {
      负重走 Core.resolveWeightInput：数字（可带 kg）原样入库，「自重」折算成 0，
      练了却没填重量也按自重（0）记，整行没动过才记 null（没记）。 */
   async _saveActual(root, day, withFinish) {
+    const liveDay = Core.dayRecord(Store.db.strength, day.date) || day;
+    if (liveDay.status === 'completed' || liveDay.status === 'skipped') {
+      toast('这一天已收尾，重开后才能修改', 'red');
+      return;
+    }
     const actions = $$('#st-actions .st-tr', root)
       .filter((tr) => tr.querySelector('.st-num'))
       .map((tr) => {
+        const idx = Number(tr.querySelector('[data-idx]').dataset.idx);
+        const action = (liveDay.actions || [])[idx] || day.actions[idx] || {};
+        const dirty = ['setsDone', 'repsText', 'weightKg'].some((key) => {
+          const el = tr.querySelector(`[data-key="${key}"]`);
+          return el && el.dataset.dirty === '1';
+        });
+        /* 没改过的行提交记录里的当前值。逐组弹窗刚保存后，主表输入仍可能是旧数字。 */
+        if (!dirty && Array.isArray(action.sets)) {
+          const kept = {
+            actionKey: action.actionKey,
+            setsDone: action.setsDone === undefined ? null : action.setsDone,
+            repsText: action.repsText || '',
+            weightKg: action.weightKg === undefined ? null : action.weightKg
+          };
+          if (Array.isArray(action.sets)) kept.sets = JSON.parse(JSON.stringify(action.sets));
+          return kept;
+        }
         const get = (key) => {
           const el = tr.querySelector(`[data-key="${key}"]`);
           return el ? el.value : '';
@@ -940,24 +1022,25 @@ const Strength = {
         /* 这一行练过（有完成组数或有实际次数）就把留空当自重记；整行没动仍留 null */
         const weight = Core.resolveWeightInput(get('weightKg'), (setsDone || 0) > 0 || !!repsText);
         if (!weight.ok) {
-          const nm = (day.actions[Number(tr.querySelector('[data-idx]').dataset.idx)] || {}).name || '';
-          toast(`${nm ? nm + '：' : ''}${weight.error}`, 'red');
+          toast(`${action.name ? action.name + '：' : ''}${weight.error}`, 'red');
           return { invalid: true };
         }
         return {
-          actionKey: day.actions[Number(tr.querySelector('[data-idx]').dataset.idx)].actionKey,
+          actionKey: action.actionKey,
           setsDone,
           repsText,
-          weightKg: weight.value
+          weightKg: weight.value,
+          summaryEdited: true
         };
       });
     if (actions.some((a) => a.invalid)) return;
     const opened = this._ensureDay(day);
     if (!opened.ok) { toast(opened.error, 'red'); return; }
+    const previous=structuredClone(Store.db.strength);
     const patch = { date: day.date, actions };
     const r = Core.saveTraining(Store.db.strength, patch);
     if (!r.ok) { toast(r.error, 'red'); return; }
-    Store.save(true);
+    try{if(!await Store.save(true))throw Error('write failed');}catch{Store.db.strength=previous;toast('保存失败，数值已保留，请重试','red');return;}
     if (withFinish) {
       const card = openModal(`
         <h3>✓ 完成并进入下一训练日</h3>
@@ -987,7 +1070,7 @@ const Strength = {
         App.render();
       };
     } else {
-      toast('已保存');
+      toast('实际数据与变化已保存，下次沿用这次基准','green');
     }
     App.render();
   },
@@ -996,6 +1079,15 @@ const Strength = {
      皮肤预测引擎会把该日按未训练处理）。预览日未开始时先落快照再跳过。 */
   _skipModal(day) {
     const state = Store.db.strength;
+    const live = Core.dayRecord(state, day.date);
+    if (live && (live.status === 'completed' || live.status === 'skipped')) {
+      toast('这一天已收尾，重开后才能修改', 'red');
+      return;
+    }
+    if (live && live.status === 'partial') {
+      toast('这一天已经记了训练，要改成跳过请先重开', 'red');
+      return;
+    }
     const card = openModal(`
       <h3>⏭ 今天不练了？</h3>
       <p class="hint">这一天会记为「已跳过」并轮转到下一训练日。写下原因，历史里能提醒未来的自己。</p>
@@ -1056,12 +1148,13 @@ const Strength = {
       <div class="card">
         <h3>🗓️ 本周概览 <span class="h-extra">推荐每个部位每周 ${rec.min}–${rec.max} 组</span></h3>
         ${weekRows.length ? weekRows.map(({ s, p }) => {
-          const ok = p.sets >= rec.min;
+          const ok = p.sets >= rec.min && p.sets <= rec.max;
+          const over = p.sets > rec.max;
           return `
           <div class="st-week-item" style="margin-bottom:12px">
             <div style="display:flex; align-items:baseline; gap:10px; font-size:13px; margin-bottom:4px">
               <b>${esc(s.bodyPart)}</b><span class="hint">${p.sets} 组 · ${p.sessions} 练</span>
-              <em class="${ok ? 'is-ok' : ''}" style="font-style:normal; margin-left:auto; font-size:12px; color:${ok ? '#15803d' : 'rgba(44,58,71,.55)'}">${ok ? '已进入推荐区间' : `推荐每周 ${rec.min}–${rec.max} 组`}</em>
+              <em class="${ok ? 'is-ok' : ''}" style="font-style:normal; margin-left:auto; font-size:12px; color:${ok ? '#15803d' : over ? '#b45309' : 'rgba(44,58,71,.55)'}">${ok ? '处于参考区间' : over ? '超过参考区间上限' : `参考每周 ${rec.min}–${rec.max} 组`}</em>
             </div>
             <div class="st-meter-wrap" style="${S.meterWrap}">
               <i class="st-meter-band" style="position:absolute; top:0; left:50%; width:50%; height:100%; background:rgba(79,124,255,.14)"></i>

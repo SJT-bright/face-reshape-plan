@@ -7,25 +7,24 @@ const Session = {
   /* awaitPlay=true：等待真实视频播放状态，本地事件与主进程子框架探测共用。 */
   start(videoId, sessionId, opts) {
     if (!videoId) { toast('请先选择跟练视频', 'red'); return false; }
+    const mode = Store.videoMode(Store.videoById(videoId));
+    if (this.active && this.active.videoId !== videoId) this.stop();
     if (this.active) {
-      // 已有进行中的会话：切换视频归属继续计时
-      this.active.videoId = videoId;
       if (sessionId) this.active.sessionId = sessionId;
-      toast('已切换到新视频，计时继续');
       return true;
     }
     const awaitPlay = !!(opts && opts.awaitPlay);
     const entryId = uid('en');
     this.active = {
       entryId, dateKey: todayKey(), startedAt: Date.now(),
-      seconds: 0, running: !awaitPlay, awaitingPlay: awaitPlay, videoId, sessionId: sessionId || null,
+      seconds: 0, running: !awaitPlay, awaitingPlay: awaitPlay, videoId, mode, sessionId: mode === 'face' ? sessionId || null : null,
       autoPausedBy: null,  // 自动暂停来源：'background'（切后台）| 'media'（视频暂停）| null
       interruptions: 0     // 打断次数（手动暂停/视频暂停/切后台），仅后台记录与成就展示，跟练/今日界面零显示
     };
-    Store.addTrainingEntry(todayKey(), {
-      id: entryId, videoId, sessionId: sessionId || null,
+    Store.addWatchingEntry(todayKey(), {
+      id: entryId, videoId, collectionId: mode, sessionId: mode === 'face' ? sessionId || null : null,
       start: hhmm(), seconds: 0, manual: false, interruptions: 0, source:'media-observed'
-    });
+    }, mode);
     return true;
   },
 
@@ -76,16 +75,17 @@ const Session = {
     this.active = null; Store.db.activeFollow = null;
     /* 等待态没计时就结束：移除 0 秒占位条目，不污染记录与视频统计 */
     if (a.awaitingPlay && (a.seconds || 0) === 0) {
-      Store.removeTrainingEntry(a.dateKey, a.entryId);
+      Store.removeWatchingEntry(a.dateKey, a.entryId, a.mode || Store.videoMode(Store.videoById(a.videoId)));
       Store.save(true);
       return null;
     }
     /* 完播判定：有效计时 ≥ 80% 视频时长（且 ≥120s；无时长按 3 分钟）才计入完整跟练次数 */
     const video = a.videoId ? Store.videoById(a.videoId) : null;
     const { completed } = followCompletion(a.seconds, video ? video.durationSec : null);
-    Store.updateTrainingEntry(a.dateKey, a.entryId, { seconds: a.seconds, end: hhmm(), completed });
+    const mode = a.mode || Store.videoMode(video);
+    Store.updateWatchingEntry(a.dateKey, a.entryId, { seconds: a.seconds, end: hhmm(), completed }, mode);
     Store.save(true);
-    if (completed) Views.checkBadgeUnlocks(); // 完整跟练可能解锁徽章，即时庆祝
+    if (completed && mode === 'face') Views.checkBadgeUnlocks(); // 自定义板块不计入瘦脸成就
     return a.seconds;
   },
 
@@ -108,19 +108,20 @@ const Session = {
     if (typeof native === 'undefined' || !native.notify) return;
     const a = this.active;
     const min = Math.floor(a.seconds / 60);
+    const watching = (a.mode || Store.videoMode(Store.videoById(a.videoId))) !== 'face';
     if (a.seconds % 1800 === 0 && min > 0) {
-      native.notify('⏱ 跟练计时进行中', `已计时 ${min} 分钟。练完了记得点「结束」；记多了也没关系，成就日历里每条记录都可以修改。`);
+      native.notify(watching ? '⏱ 视频观看进行中' : '⏱ 跟练计时进行中', watching ? `已观看 ${min} 分钟。看完后请点「结束并记录」。` : `已计时 ${min} 分钟。练完后请点「结束并记录」；时长可在成就日历中修改。`);
       return;
     }
     if (App.hiddenSince && Date.now() - App.hiddenSince >= 120000 && a.seconds > 0 && a.seconds % 300 === 0) {
-      native.notify('⏱ 不在前台，计时仍在进行', '如果不是在跟练，回到应用点「结束」，时长可在成就日历里修改。');
+      native.notify('⏱ 不在前台，计时仍在进行', watching ? '如果已看完，请回到应用点「结束并记录」。' : '如果已练完，请回到应用点「结束并记录」。时长可在成就日历中修改。');
     }
   },
 
   _persist() {
     const a = this.active;
     Store.db.activeFollow = a ? {...a,running:false} : null;
-    if (a) Store.updateTrainingEntry(a.dateKey, a.entryId, { seconds: a.seconds, interruptions: a.interruptions || 0, technicalPauses: a.technicalPauses || 0, source:'media-observed' });
+    if (a) Store.updateWatchingEntry(a.dateKey, a.entryId, { seconds: a.seconds, interruptions: a.interruptions || 0, technicalPauses: a.technicalPauses || 0, source:'media-observed' }, a.mode || Store.videoMode(Store.videoById(a.videoId)));
   }
 };
 
@@ -178,16 +179,38 @@ const App = {
     window.addEventListener('focus', () => { this.hiddenSince = null; });
 
 
+    if (Store.currentMode() !== 'face') this.currentView = 'awakening';
     this.render();
+    Douyin.prepareLibrary();
+  },
+
+  goCollection(id) {
+    if (!Store.collectionById(id)) return;
+    if (Store.currentMode() !== id) {
+      Bilibili.MediaSync.pauseAll();
+      Session.autoPause('media');
+      Store.setMode(id);
+      this.followVideoId = null;
+    }
+    this.go(id === 'face' ? 'today' : 'awakening');
   },
 
   go(view) {
     if (this.currentView === 'follow' && view !== 'follow') {
       Bilibili.MediaSync.pauseAll(); Session.autoPause('media');
     }
+    if (view === 'today' && Store.currentMode() !== 'face') {
+      Bilibili.MediaSync.pauseAll(); Session.autoPause('media');
+      Store.setMode('face'); this.followVideoId = null;
+    }
+    if (view === 'awakening' && Store.currentMode() === 'face') {
+      const collection = Store.collections().find(c => c.id !== 'face');
+      if (!collection) return;
+      Store.setMode(collection.id);
+    }
     this.currentView = view;
     $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
-    $('#page-title').textContent = Views.titles[view] || view;
+    $('#page-title').textContent = view === 'awakening' ? Store.currentCollection().name : view === 'today' ? Store.collectionById('face').name : view === 'follow' && Store.currentMode() !== 'face' ? Store.currentCollection().name + ' · 沉浸观看' : Views.titles[view] || view;
     this.render();
   },
 
@@ -197,8 +220,9 @@ const App = {
     const v = this.currentView;
     /* 动效分级：切栏目播完整入场（虚化揭示+卡片错峰），页内重绘只播轻量刷新，
        避免打卡/保存/翻页每次都整页模糊 0.5 秒 */
-    const viewChanged = this._renderedView !== v;
-    this._renderedView = v;
+    const viewKey = v + ':' + Store.currentMode();
+    const viewChanged = this._renderedView !== viewKey;
+    this._renderedView = viewKey;
     this._renderedDay = todayKey();
     root.classList.remove('view-enter', 'view-update');
     void root.offsetWidth; // 强制回流，让同类动画也能重播（如 A→B→A 再点回来）
@@ -210,6 +234,7 @@ const App = {
     }
     try {
       if (v === 'today') Views.today(root);
+      else if (v === 'awakening') Views.awakening(root);
       else if (v === 'follow') Views.follow(root);
       else if (v === 'settings') UX.settings(root);
       else if (v === 'membership') Membership.view(root);
@@ -234,6 +259,11 @@ const App = {
       pill.textContent = '';
       return;
     }
+    if (['awakening', 'follow'].includes(this.currentView) && Store.currentMode() !== 'face') {
+      pill.className = 'pill';
+      pill.textContent = `今日观看 ${fmtSeconds(Store.dayWatching(todayKey()).seconds)}`;
+      return;
+    }
     const day = Store.dayTraining(todayKey());
     const target = Store.settings().dailyTargetMinutes || 15;
     const min = Math.round(day.seconds / 60);
@@ -254,8 +284,9 @@ const App = {
       bar.classList.remove('hidden');
       document.body.classList.add('has-minibar'); // 内容区让位，避免遮挡底部按钮
       $('#mini-session-time').textContent = fmtSeconds(Session.active.seconds);
+      const watching = (Session.active.mode || Store.videoMode(Store.videoById(Session.active.videoId))) !== 'face';
       $('#mini-session-label').textContent = Session.active.awaitingPlay ? '等待视频播放'
-        : Session.active.running ? '跟练计时中'
+        : Session.active.running ? (watching ? '观看中' : '跟练计时中')
         : Session.active.autoPausedBy === 'background' ? '已自动暂停（回到应用继续）'
         : Session.active.autoPausedBy === 'media' ? '已自动暂停（视频暂停）'
         : '计时已暂停';
@@ -267,9 +298,12 @@ const App = {
 
   /* 直接进入跟练（选定视频后的一跳） */
   launchFollow(videoId, sessionId, opts) {
-    const video=Store.videoById(videoId); if(video)video.lastUsedAt=new Date().toISOString();
+    const video=Store.videoById(videoId); if (!video) return;
+    Store.setMode(Store.videoMode(video));
+    video.lastUsedAt=new Date().toISOString();
     if (Session.active && Session.active.videoId !== videoId) Session.stop();
     this.followVideoId = videoId;
+    this.followSessionId = sessionId || null;
     // Only an explicit click on the home video frame requests immediate playback.
     this.followAutoplay = opts?.autoplay === true;
     this.go('follow');
@@ -279,19 +313,21 @@ const App = {
 
   /* 「今天练什么操」选择界面：点跟练先来这里，选好再进跟练 */
   openPracticeChooser(sess) {
-    const videos = Store.db.videos;
+    const mode = sess ? 'face' : Store.currentMode();
+    const watching = mode !== 'face';
+    const videos = Store.videosForMode(mode);
     const weekday = new Date().getDay();
-    const todays = (Store.db.sessions || []).filter(s => s.enabled && (s.days || []).includes(weekday))
+    const todays = watching ? [] : (Store.db.sessions || []).filter(s => s.enabled && (s.days || []).includes(weekday))
       .sort((a, b) => (minutesOf(a.time) || 0) - (minutesOf(b.time) || 0));
     const bound = sess && sess.videoId ? Store.videoById(sess.videoId) : null;
 
     const card = openModal(`
-      <h3>🎬 今天练什么操？</h3>
+      <h3>🎬 ${watching ? '选择观看视频 · ' + esc(Store.collectionById(mode).name) : '选择跟练视频'}</h3>
       <p class="hint">${sess ? `为「${esc(sess.name)}」选一个跟练视频，选定后自动绑定，以后到点直达。` : '从下面选一个开始，或者先导入新视频。'}</p>
       ${bound ? `
         <div class="row chooser-direct">
           <img class="t-thumb" src="${bound.source === 'bilibili' && bound.pic ? esc(bound.pic) : ''}" referrerpolicy="no-referrer">
-          <div style="flex:1"><b>已绑定：${esc(bound.title)}</b><div class="hint">上次为该安排选的视频</div></div>
+          <div style="flex:1"><b>已绑定：${esc(bound.title)}</b><div class="hint">当前绑定到该安排的视频</div></div>
           <button class="btn primary" id="ch-direct">▶ 直接开始</button>
         </div><hr class="sep">` : ''}
       ${todays.length ? `
@@ -312,12 +348,12 @@ const App = {
           <div class="vid-card ch-vid" data-vid="${v.id}">
             ${v.source === 'bilibili' && v.pic ? `<img class="vid-cover" src="${esc(v.pic)}" referrerpolicy="no-referrer">` : `<div class="vid-cover ph">🎞️</div>`}
             <div class="vid-info"><div class="vid-title">${esc(v.title)}</div>
-            <div class="vid-meta"><span>${v.source === 'bilibili' ? 'B站' : '本地'}${v.durationSec ? ' · ' + Math.round(v.durationSec / 60) + '分钟' : ''}</span></div></div>
+            <div class="vid-meta"><span>${v.source === 'bilibili' ? 'B 站' : '本地'}${v.durationSec ? ' · ' + Math.round(v.durationSec / 60) + ' 分钟' : ''}</span></div></div>
           </div>`).join('') : '<div class="empty" style="grid-column:1/-1">视频库是空的，先用下面任一方式导入。</div>'}
       </div>
       <hr class="sep">
       <div class="row">
-        <input class="input" id="ch-url" style="flex:1; min-width:200px" placeholder="粘贴B站链接 / BV号，导入并开始">
+        <input class="input" id="ch-url" style="flex:1; min-width:200px" placeholder="粘贴 B 站 / 抖音视频链接或 BV 号">
         <button class="btn" id="ch-import">导入</button>
         <button class="btn" id="ch-local">📁 本地视频</button>
         <button class="btn ghost" id="ch-close">关闭</button>
@@ -347,9 +383,21 @@ const App = {
     $('#ch-import', card).onclick = async () => {
       const text = $('#ch-url', card).value.trim();
       if (!text) { toast('先粘贴链接或 BV 号', 'red'); return; }
-      const p = Bilibili.parse(text);
-      if (!p) { toast('没识别出视频，检查一下链接', 'red'); return; }
-      let v = Store.db.videos.find(x => ((p.bvid && x.bvid === p.bvid) || (p.aid && x.aid === p.aid)) && (x.page||1)===p.page);
+      const p = VideoLink.parse(text);
+      if (!p) { toast('无法识别视频链接或 BV 号，请检查后重试', 'red'); return; }
+      if (p.source === 'douyin') {
+        const button = $('#ch-import', card);
+        button.disabled = true; button.textContent = '正在下载到本地…';
+        try {
+          const video = await Douyin.importLocal(p, mode, d => {
+            button.textContent = d.total ? `下载中 ${Math.floor(d.received / d.total * 100)}%` : `已下载 ${(d.received / 1048576).toFixed(1)} MB`;
+          });
+          pick(video);
+        } catch (error) { toast('抖音下载失败：' + error.message, 'red'); }
+        finally { button.disabled = false; button.textContent = '导入并选择'; }
+        return;
+      }
+      let v = Store.videosForMode(mode).find(x => ((p.bvid && x.bvid === p.bvid) || (p.aid && x.aid === p.aid)) && (x.page||1)===p.page);
       if (!v) {
         toast('正在获取视频信息…');
         const info = await window.native.fetchBilibiliInfo(p.bvid || ('av' + p.aid));
@@ -363,7 +411,7 @@ const App = {
           durationSec: (info && info.ok) ? info.durationSec : null,
           addedAt: new Date().toISOString()
         };
-        Store.db.videos.push(v);
+        Store.addVideo(v, mode);
         Store.save(true);
       }
       pick(v);
@@ -372,7 +420,7 @@ const App = {
       const r = await window.native.pickLocalVideo();
       if (!r) return;
       const v = { id: uid('vid'), source: 'local', localPath: r.path, title: r.name, pic: '', durationSec: null, addedAt: new Date().toISOString() };
-      Store.db.videos.push(v);
+      Store.addVideo(v, mode);
       Store.save(true);
       pick(v);
     };
@@ -418,7 +466,7 @@ const App = {
      ① 等待态探测到视频在播 → 自动开始计时（本地视频此前已由 play 事件联动，这里是 B 站兜底）
      ② 计时中视频被暂停（用户在播放器里按了空格等）→ 计时同步暂停
      ③ 计时被自动暂停后视频恢复播放 → 计时同步继续
-     状态不可知（null）不计时。 */
+     状态不可知（null）不计时，也不暂停已经在走的表。 */
   async pollMediaSync() {
     if (this._mediaProbeBusy || !Session.active || this.currentView !== 'follow') return;
     this._mediaProbeBusy = true;
@@ -429,16 +477,21 @@ const App = {
       if (Session.active !== active || this.currentView !== 'follow' ||
           document.querySelector('#stage')?.firstElementChild !== stage || epoch !== this._mediaEpoch) return;
       const state = Bilibili.MediaSync.lastState;
+      if (state?.ended && typeof Routine !== 'undefined' && Routine.active?.stage === 'training' && Routine.active.videoId === active.videoId) { await Routine.finishTraining(); return; }
       if(state && Number.isFinite(state.currentTime)) {active.mediaPosition=state.currentTime;const v=Store.videoById(active.videoId);if(v)v.playbackVerified=true;}
       active.mediaStatus=state?.seeking?'跳转中':state&&state.readyState<3?'缓冲中':playing===true?'计时中':playing===null?'播放器状态不可读取':'暂停';
-      this.applyMediaState(playing === true);
+      this.applyMediaState(playing);
     } finally { this._mediaProbeBusy = false; }
   },
 
+  /* playing：true 开始、false 暂停；null 或其他非布尔表示不可知，不开始也不停表 */
   applyMediaState(playing) {
     const a = Session.active;
     if (!a) return;
-    // An unknown/disconnected player never earns training time.
+    if (playing !== true && playing !== false) {
+      Views.syncTimerUI($('#view-root'));
+      return;
+    }
     if (playing && !(this._bgHandled && Store.db.settings.autoPauseOnBlur !== false)) {
       if (a.awaitingPlay) Session.beginCounting();
       else { a.running = true; a.autoPausedBy = null; }
@@ -475,6 +528,8 @@ const App = {
 
 // 迷你会话条「回到跟练」
 document.addEventListener('DOMContentLoaded', () => {
-  $('#mini-session-open').onclick = () => App.go('follow');
+  $('#mini-session-open').onclick = () => {
+    if (Session.active) App.launchFollow(Session.active.videoId, Session.active.sessionId);
+  };
   App.boot();
 });

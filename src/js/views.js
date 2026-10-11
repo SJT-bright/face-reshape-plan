@@ -1,7 +1,7 @@
 /* 各页面视图：今日 / 跟练 / 视频库 / 跟练计划 / 成就 */
 
 const Views = {
-  titles: { membership: '成长计划', nutrition: '饮食与睡眠', today: '今日', follow: '沉浸式跟练', settings:'设置', plan: '跟练计划', strength: '力量训练', skincare: '护肤', achievements: '成就地图' },
+  titles: { membership: '成长计划', nutrition: '饮食与睡眠', today: '瘦脸护理', awakening: '认知唤醒', follow: '沉浸式跟练', settings:'设置', plan: '跟练计划', strength: '力量训练', skincare: '护肤', achievements: '成就地图' },
 
   /* ================= 今日（打开即练） ================= */
   today(root) {
@@ -13,7 +13,7 @@ const Views = {
     const sessions = (Store.db.sessions || []).filter(s => s.enabled && (s.days || []).includes(weekday))
       .sort((a, b) => (minutesOf(a.time) || 0) - (minutesOf(b.time) || 0));
     const curMin = nowMinutes();
-    const videos = Store.db.videos;
+    const videos = Store.videosForMode('face');
 
     /* 今晚入睡建议：计算一次，简报与下方建议卡共用（同帧重复计算合并） */
     let sleepTip = null;
@@ -31,10 +31,10 @@ const Views = {
       /* 凌晨 0–6 点：昨晚的睡眠条目 endLocal 是「昨天」，此时查今天会误报「还没记」且无法补记（尚未起床） */
       const briefDay = curMin < 6 * 60 ? addDays(t, -1) : t;
       const sleeps = (Store.db.rhythm || {}).sleeps || [];
-      const lastSleep = sleeps.filter(s => s.end && s.kind !== 'nap' && String(s.endLocal || '').slice(0, 10) === briefDay)
-        .sort((a, b) => (Date.parse(b.end) - Date.parse(b.start)) - (Date.parse(a.end) - Date.parse(a.start)))[0] || null;
+      const lastSleep = sleeps.filter(s => RhythmEngine.hasSleep(s) && s.kind !== 'nap' && String(s.endLocal || '').slice(0, 10) === briefDay)
+        .sort((a, b) => RhythmEngine.sleepMinutes(b)-RhythmEngine.sleepMinutes(a))[0] || null;
       const sleepMinutes = lastSleep ? RhythmEngine.sleepMinutes(lastSleep) : null;
-      const sleepQ = lastSleep ? RhythmEngine.sleepQuality({ durationMinutes: sleepMinutes, deepMinutes: lastSleep.deepMinutes ?? null, remMinutes: lastSleep.remMinutes ?? null, awakeEpisodes: lastSleep.awakeEpisodes ?? null, morningFeeling: lastSleep.morningFeeling ?? null, qualityScore: lastSleep.qualityScore ?? null }) : null;
+      const sleepQ = lastSleep?.durationOnly?{score:lastSleep.qualityScore}:lastSleep ? RhythmEngine.sleepQuality({ durationMinutes: sleepMinutes, deepMinutes: lastSleep.deepMinutes ?? null, remMinutes: lastSleep.remMinutes ?? null, awakeEpisodes: lastSleep.awakeEpisodes ?? null, morningFeeling: lastSleep.morningFeeling ?? null, qualityScore: lastSleep.qualityScore ?? null }) : null;
       const skinData = Store.db.skin || {};
       SkinEngine.normalize(Store.db); Skincare._ensureTodayPrediction();
       const pred = (Store.db.skin.predictions || {})[t];
@@ -103,7 +103,7 @@ const Views = {
 
         <!-- 今天能练的课 -->
         <div class="card">
-          <h3>🎬 今天可以练 <span class="h-extra">${sessions.length} 个安排 · 去点时间在「跟练计划」里调</span></h3>
+          <h3>🎬 今天可以练 <span class="h-extra">${sessions.length} 个安排 · 可在「跟练计划」调整时间</span></h3>
           <div class="course-grid" id="td-courses"></div>
         </div>
 
@@ -129,7 +129,7 @@ const Views = {
     if (sleepGo) sleepGo.onclick = () => App.go('nutrition');
     $$('#td-brief [data-go]', root).forEach(b => { b.onclick = () => App.go(b.dataset.go); });
     if (!sessions.length) {
-      courses.innerHTML = `<div class="empty">今天还没有安排课程。<br><button class="btn small primary" id="td-goplan">去跟练计划安排一下</button>　或点上方「开练」自由跟练</div>`;
+      courses.innerHTML = `<div class="empty">今天还没有安排课程。<br><button class="btn small primary" id="td-goplan">去跟练计划安排一下</button>　也可点上方「开始今天的训练」自由跟练</div>`;
       const g = $('#td-goplan', courses); if (g) g.onclick = () => App.go('plan');
     }
     for (const s of sessions) {
@@ -196,47 +196,116 @@ const Views = {
       skBox.appendChild(colEl);
     }
 
-    // 视频库
+    Views.renderVideoLibrary(root, 'face');
+    $('#td-go', root).onclick = () => App.openPracticeChooser(null);
+  },
+
+  /* ================= 独立视频板块 ================= */
+  awakening(root) {
+    const mode = Store.currentMode();
+    const collection = Store.currentCollection() || { id: mode, name: '认知唤醒', periods: ['morning'] };
+    const videos = Store.videosForMode(mode);
+    const day = Store.dayWatching(todayKey(), mode);
+    const minutes = Math.round((day.seconds || 0) / 6) / 10;
+    const target = Store.watchingTarget ? Store.watchingTarget(todayKey(),mode) : 15;
+    const entries = (day.entries || []).filter(entry => (entry.seconds || 0) > 0).slice().reverse();
+    const periodNames = { morning: '早上', evening: '晚上' };
+    const periods = (collection.periods || []).filter(p => periodNames[p]);
+    root.innerHTML = `
+      <div class="view awakening-view" data-video-mode="${esc(mode)}">
+        <div class="awakening-heading">
+          <div class="awakening-periods" aria-label="观看时段">${periods.map(p => `<button type="button" class="tag awakening-period" data-watch-period="${p}" aria-pressed="false">${p === 'morning' ? '☀️' : '🌙'} ${periodNames[p]}</button>`).join('')}<span class="hint" id="watch-current-period"></span></div>
+          <button class="btn small ghost" id="edit-video-collection">编辑板块</button>
+        </div>
+        <div class="today-top awakening-top">
+          <div class="today-top-main">
+            <div class="today-copy">
+              <div class="awakening-eyebrow">给自己一段专注的时间</div>
+              <h1 class="today-title">${esc(collection.name)}</h1>
+              <div class="today-top-hint">选择一段视频，整理思绪，唤醒这一刻的状态。</div>
+            </div>
+            <button class="btn-go" id="td-go">▶ <span>开始观看</span></button>
+          </div>
+          <div class="mini-stat" title="这个板块的今日观看时长">
+            <b>${minutes}</b><span>/ ${target} 分钟 · 今日观看</span><i>${(day.seconds||0)>=target*60?'今日目标已完成':'按自己的节奏积累'}</i><button class="btn small ghost" id="watch-plan-settings">调整时长与时间</button>
+          </div>
+        </div>
+        <div class="card awakening-player">
+          <div class="awakening-player-copy"><h3>现在看什么</h3><p class="hint">挑一个喜欢的视频，随时开始，随时继续。</p></div>
+          <aside class="ux-home-video" id="ux-home-video" aria-label="${esc(collection.name)}快捷视频"></aside>
+        </div>
+        <div class="card awakening-library">
+          <h3>📺 ${esc(collection.name)}视频库 <span class="h-extra">${videos.length} 个视频 · 点封面观看</span>
+            <button class="btn small primary" id="td-import" style="margin-left:auto">＋ 导入视频</button></h3>
+          <div class="vid-grid" id="td-vids"></div>
+        </div>
+        ${entries.length ? `<details class="card awakening-records">
+          <summary>今日观看记录 <span class="hint">${entries.length} 段 · ${minutes} 分钟</span></summary>
+          <div class="awakening-record-list">${entries.map(entry => {
+            const video = Store.videoById(entry.videoId);
+            const title = video?.title || entry.note || '已删除的视频';
+            const time = [entry.start, entry.end].filter(Boolean).join('–');
+            return `<div class="awakening-record"><div><b>${esc(title)}</b><span>${esc(time || '今日')}${!entry.end ? ' · 本次尚未结束' : ''}</span></div><time>${esc(fmtDuration(entry.seconds))}</time></div>`;
+          }).join('')}</div>
+        </details>` : ''}
+      </div>`;
+    Views.renderVideoLibrary(root, mode);
+    $('#td-go', root).onclick = () => App.openPracticeChooser(null);
+  },
+
+  renderVideoLibrary(root, mode = Store.currentMode()) {
+    const videos = Store.videosForMode(mode);
+    const watching = mode !== 'face';
     const vids = $('#td-vids', root);
-    if (!videos.length) vids.innerHTML = `<div class="empty" style="grid-column:1/-1">还没有视频。点右上「＋导入视频」，粘贴B站链接即可。</div>`;
+    if (!vids) return;
+    vids.innerHTML = '';
+    if (!videos.length) vids.innerHTML = `<div class="empty" style="grid-column:1/-1">这个视频库还没有视频。点「＋导入视频」，粘贴 B 站链接或选择本地文件。</div>`;
     for (const v of videos) {
       const card = document.createElement('div');
       card.className = 'vid-card';
+      card.dataset.video = v.id;
       const stats = Store.videoStats(v.id);
       const statLine = stats.total
-        ? ` · ✅ 完整跟练 ${stats.completed} 次${stats.days ? ` · 坚持 ${stats.days} 天` : ''}`
+        ? ` · ✅ 完整${watching ? '观看' : '跟练'} ${stats.completed} 次${stats.days ? ` · 有记录 ${stats.days} 天` : ''}`
         : '';
       card.innerHTML = `
         ${v.source === 'bilibili' && v.pic ? `<img class="vid-cover" src="${esc(v.pic)}" referrerpolicy="no-referrer">` : `<div class="vid-cover ph">🎞️</div>`}
         <div class="vid-info">
           <div class="vid-title">${esc(v.title)}</div>
-          <div class="vid-meta"><span>${v.source === 'bilibili' ? 'B站' : '本地'}${v.durationSec ? ' · ' + Math.round(v.durationSec / 60) + '分钟' : ''}${statLine}</span></div>
+          <div class="vid-meta"><span>${v.source === 'bilibili' ? 'B站' : v.source === 'douyin' ? (v.downloadState === 'error' ? '下载失败 · 点击重试' : '待下载') : '本地'}${v.durationSec ? ' · ' + Math.round(v.durationSec / 60) + '分钟' : ''}${statLine}</span></div>
         </div>
         <button class="vid-del" title="删除该视频">✕</button>`;
       card.onclick = () => App.launchFollow(v.id, null);
       $('.vid-del', card).onclick = async (e) => {
         e.stopPropagation();
-        const ok = await confirmModal('删除视频', `确定从视频库删除「${v.title}」吗？\n跟练计划中对该视频的引用会一并清空。`, '删除');
+        const ok = await confirmModal('删除视频', `确定从这个视频库删除「${v.title}」吗？${watching ? '' : '\n跟练计划中对该视频的引用会一并清空。'}`, '删除');
         if (!ok) return;
-        Store.db.videos = Store.db.videos.filter(x => x.id !== v.id);
-        for (const s of Store.db.sessions) if (s.videoId === v.id) s.videoId = null;
+        if (Session.active?.videoId === v.id) {
+          App._mediaEpoch = (App._mediaEpoch || 0) + 1;
+          try { Bilibili.MediaSync.pauseAll(); } catch {}
+          Session.stop();
+        }
+        if (v.source === 'local' && v.localPath) Store.excludeLocalVideo(v.localPath);
+        Store.db.videos = Store.db.videos.filter(x => !(x.id === v.id && Store.videoMode(x) === mode));
+        if (!watching) for (const s of Store.db.sessions) if (s.videoId === v.id) s.videoId = null;
         if (App.followVideoId === v.id) App.followVideoId = null;
         Store.save(true); App.render();
         toast('视频已删除', 'green');
       };
       vids.appendChild(card);
     }
-    $('#td-import', root).onclick = () => Views.importModal();
-    $('#td-go', root).onclick = () => App.openPracticeChooser(null);
+    const importButton = $('#td-import', root);
+    if (importButton) importButton.onclick = () => Views.importModal(mode);
   },
 
   /* 导入视频弹窗（原视频库导入功能） */
-  importModal() {
+  importModal(mode = Store.currentMode()) {
+    const collectionName = Store.collectionById(mode)?.name || (mode === 'face' ? '瘦脸护理' : '认知唤醒');
     const card = openModal(`
-      <h3>📺 导入视频</h3>
-      <p class="hint">粘贴 B 站链接 / BV 号（可多行批量），或导入本地视频文件。</p>
+      <h3>📺 导入到${esc(collectionName)}</h3>
+      <p class="hint">粘贴 B 站链接 / BV 号 / 抖音视频链接（分享口令可整段粘贴，每行一个），抖音会自动下载到本地，下载完成后可直接观看；也可导入本地视频文件。</p>
       <textarea class="textarea" id="imv-text" style="min-height:110px; margin-top:10px"
-        placeholder="https://www.bilibili.com/video/BVxxxxxx&#10;BV1xxxxxxxxxx（每行一个）"></textarea>
+        placeholder="https://www.bilibili.com/video/BVxxxxxx&#10;BV1xxxxxxxxxx&#10;https://v.douyin.com/xxxxxx/（每行一个）"></textarea>
       <div class="row" style="margin-top:12px">
         <button class="btn primary" id="imv-add">🔍 获取信息并导入</button>
         <button class="btn" id="imv-local">📁 本地视频文件</button>
@@ -244,13 +313,29 @@ const Views = {
     $('#imv-add', card).onclick = async () => {
       const lines = $('#imv-text', card).value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
       if (!lines.length) { toast('先粘贴链接或 BV 号', 'red'); return; }
+      const button = $('#imv-add', card);
+      if (button.disabled) return;
+      button.disabled = true;
+      let failedN = 0;
       let okN = 0;
+      let pendingN = 0;
       for (const line of lines) {
-        const p = Bilibili.parse(line);
+        const p = VideoLink.parse(line);
         if (!p) { toast(`无法识别：${line.slice(0, 30)}`, 'red'); continue; }
-        if (Store.db.videos.find(v => v.bvid === p.bvid || (p.aid && v.aid === p.aid))) continue;
+        if (p.source === 'douyin') {
+          button.textContent = '正在下载抖音视频到本地…';
+          try {
+            await Douyin.importLocal(p, mode, d => {
+              button.textContent = d.total ? `下载中 ${Math.floor(d.received / d.total * 100)}%` : `已下载 ${(d.received / 1048576).toFixed(1)} MB`;
+            });
+            okN++;
+          } catch (error) { failedN++; toast('抖音下载失败：' + error.message, 'red'); }
+          continue;
+        }
+        if (Store.videosForMode(mode).find(v => (p.bvid ? v.bvid === p.bvid : (p.aid && v.aid === p.aid)) && (v.page || 1) === (p.page || 1))) continue;
         const info = await window.native.fetchBilibiliInfo(p.bvid || ('av' + p.aid));
-        Store.db.videos.push({
+        if (!(info && info.ok)) pendingN++;
+        Store.addVideo({
           id: uid('vid'), source: 'bilibili',
           bvid: p.bvid || null, aid: p.aid || null, page: p.page || 1,
           cid: (info && info.ok) ? (info.cid || null) : null,
@@ -258,18 +343,22 @@ const Views = {
           pic: (info && info.ok) ? info.pic : '',
           durationSec: (info && info.ok) ? info.durationSec : null,
           addedAt: new Date().toISOString()
-        });
+        }, mode);
         okN++;
       }
+      button.disabled = false; button.textContent = '获取信息并导入';
       if (okN) {
-        Store.save(true); closeModal(); App.render();
-        toast(`成功导入 ${okN} 个视频 ✓`, 'green');
-      } else toast('没有新增视频（可能都已存在）');
+        Store.save(true);
+        if (!failedN) { closeModal(); App.render(); }
+        toast(pendingN
+          ? `已保存 ${okN} 个视频，其中 ${pendingN} 个仅保存链接，视频信息待获取`
+          : `成功导入 ${okN} 个视频 ✓`, pendingN ? '' : 'green');
+      } else if (!failedN) toast('没有新增视频（可能都已存在）');
     };
     $('#imv-local', card).onclick = async () => {
       const r = await window.native.pickLocalVideo();
       if (!r) return;
-      Store.db.videos.push({ id: uid('vid'), source: 'local', localPath: r.path, title: r.name, pic: '', durationSec: null, addedAt: new Date().toISOString() });
+      Store.addVideo({ id: uid('vid'), source: 'local', localPath: r.path, title: r.name, pic: '', durationSec: null, addedAt: new Date().toISOString() }, mode);
       Store.save(true); closeModal(); App.render();
       toast(r.copied ? '本地视频已复制到「跟练视频」文件夹 ✓' : '本地视频已导入 ✓', 'green');
     };
@@ -304,6 +393,8 @@ const Views = {
 
   /* ================= 跟练 ================= */
   follow(root) {
+    const mode = Session.active?.mode || Store.currentMode?.() || 'face';
+    const watching = mode !== 'face';
     const autoplay = App.followAutoplay === true;
     App.followAutoplay = false;
     root.innerHTML = `
@@ -313,36 +404,38 @@ const Views = {
           <div class="follow-stage" id="stage"></div>
           <div class="timer-hud" id="hud">
             <div class="timer-big" id="t-big">00:00</div>
-            <div class="timer-meta" id="t-meta">选择视频后点击「开始跟练」</div>
-            <div class="t-complete" id="t-complete" hidden><div class="t-complete-track"><i id="t-complete-fill"></i></div><span id="t-complete-text"></span></div>
-            <div class="row">
-              <button class="btn primary" id="t-toggle">▶ 开始跟练</button>
+            <div class="timer-details">
+              <div class="timer-meta" id="t-meta">选择视频后点击「${watching ? '开始观看' : '开始跟练'}」</div>
+              <div class="t-complete" id="t-complete" hidden><div class="t-complete-track"><i id="t-complete-fill"></i></div><span id="t-complete-text"></span></div>
+            </div>
+            <div class="timer-actions">
+              <button class="btn primary" id="t-toggle">▶ ${watching ? '开始观看' : '开始跟练'}</button>
               <button class="btn green" id="t-stop" disabled>✓ 结束并记录</button>
               <button class="btn" id="t-imm">⛶ 沉浸全屏</button>
             </div>
           </div>
         </div>
         <div class="card" style="margin-top:14px">
-          <h3>🎬 跟练视频 <span class="h-extra">B站视频通过官方内嵌播放器播放，支持全屏</span></h3>
+          <h3>🎬 ${watching ? '观看' : '跟练'}视频 <span class="h-extra">B站视频通过官方内嵌播放器播放，支持全屏</span></h3>
           <div class="row">
             <select class="select" id="f-video" style="flex:1"></select>
             <button class="btn" id="f-load">载入播放器</button>
             <button class="btn" id="f-golib">＋ 导入新视频</button>
           </div>
-          <p class="hint" style="margin-top:8px">视频暂停/继续会自动同步计时，暂停按钮同时控制视频；切到后台自动暂停（设置 → 目标与外观里可关）。结束后时长自动计入今日目标与成就地图。</p>
+          <p class="hint" style="margin-top:8px">视频暂停或继续时，计时会同步变化；隐藏窗口时默认暂停视频与计时，可在「设置 → 目标与外观」关闭。${watching ? '结束后，观看时长记录在当前视频板块。' : '结束后，时长计入今日目标与成就地图。'}</p>
         </div>
       </div>`;
 
     const sel = $('#f-video', root);
-    const vids = Store.db.videos;
+    const vids = Store.videosForMode(mode);
     if (!vids.length) {
       sel.innerHTML = '<option value="">（视频库为空）</option>';
     } else {
       sel.innerHTML = vids.map(v => `<option value="${v.id}">${esc(v.title)}</option>`).join('');
-      if (App.followVideoId) sel.value = App.followVideoId;
-      else if (Session.active) sel.value = Session.active.videoId;
+      const selectedId = Session.active?.videoId || App.followVideoId;
+      if (vids.some(v => v.id === selectedId)) sel.value = selectedId;
     }
-    $('#f-golib', root).onclick = () => Views.importModal();
+    $('#f-golib', root).onclick = () => Views.importModal(mode);
     $('#f-load', root).onclick = () => {
       const id = sel.value;
       if (!id) { toast('视频库为空，先去导入视频', 'red'); return; }
@@ -352,7 +445,7 @@ const Views = {
     };
     $('#t-toggle', root).onclick = () => {
       const id = sel.value || App.followVideoId;
-      if (!id) { toast('请先选择跟练视频', 'red'); return; }
+      if (!id) { toast(`请先选择${watching ? '观看' : '跟练'}视频`, 'red'); return; }
       if (!Session.active) Views.loadStage($('#stage', root), Store.videoById(id));
       App._mediaEpoch = (App._mediaEpoch || 0) + 1;
       if (Session.active?.running) {
@@ -365,14 +458,18 @@ const Views = {
       Views.syncTimerUI(root);
     };
     $('#t-stop', root).onclick = async () => {
+      if (typeof Routine !== 'undefined' && Routine.active?.stage === 'training') { await Routine.finishTraining(); return; }
       const sec = Session.stop();
       try { Bilibili.MediaSync.pauseAll(); } catch (e) {} // 结束跟练后视频不再自动播
       Views.syncTimerUI(root);
       if (sec != null) {
         App.refreshStatusPill();
-        const met = Store.dayTargetMet(todayKey());
-        if (met) await confirmModal('🎉 今日目标达成！', `本次跟练 ${fmtDuration(sec)}，今日累计已达标！成就地图已点亮今天的绿色格子。`, '太棒了');
-        else toast(`本次跟练 ${fmtDuration(sec)}，继续加油～记多了或记错了？成就日历里点「改」可修正`, 'green');
+        if (watching) toast(`已记录本次观看 ${fmtDuration(sec)} ✓`, 'green');
+        else {
+          const met = Store.dayTargetMet(todayKey());
+          if (met) await confirmModal('🎉 今日目标达成！', `本次跟练 ${fmtDuration(sec)}，今日累计已达标！成就地图已点亮今天的绿色格子。`, '太棒了');
+          else toast(`本次跟练 ${fmtDuration(sec)}，继续加油～记多了或记错了？成就日历里点「改」可修正`, 'green');
+        }
       } else {
         toast('还没开始计时，本次未记录（等待播放时点「结束」不会留下空记录）');
       }
@@ -406,7 +503,7 @@ const Views = {
           }).catch(() => {});
         }
       }
-    } else if (App.followVideoId && Store.videoById(App.followVideoId)) {
+    } else if (App.followVideoId && vids.some(v => v.id === App.followVideoId)) {
       Views.loadStage(stage, Store.videoById(App.followVideoId), 0, { autoplay });
     }
     Views.syncTimerUI(root);
@@ -416,26 +513,53 @@ const Views = {
     stage.innerHTML = '';
     if (!video) {
       stage.innerHTML = `<div class="stage-empty"><div style="font-size:44px">🎬</div>
-        <div>还没有载入视频</div><div class="hint">从下方选择，或去视频库导入 B 站瘦脸操课程</div></div>`;
+        <div>还没有载入视频</div><div class="hint">从下方选择，或在当前视频库导入 B 站链接与本地视频</div></div>`;
       return;
     }
     App._mediaEpoch = (App._mediaEpoch || 0) + 1;
     if (Session.active && Session.active.videoId !== video.id) Session.stop();
-    if (!Session.active) Session.start(video.id, null, { awaitPlay: true });
+    if (!Session.active) Session.start(video.id, App.followVideoId === video.id ? App.followSessionId || null : null, { awaitPlay: true });
     else { Session.active.running = false; Session.active.autoPausedBy = 'media'; }
+    const loadToken = stage._douyinLoadToken = Symbol('load');
+    if (video.source === 'douyin') {
+      stage.innerHTML = '<div class="stage-empty">正在下载抖音视频到本地，完成后即可播放…</div>';
+      const current = () => stage.isConnected && stage._douyinLoadToken === loadToken && Session.active?.videoId === video.id;
+      Douyin.ensureLocal(video, d => {
+        if (!current()) return;
+        stage.firstChild.textContent = d.total ? `正在下载到本地 ${Math.floor(d.received / d.total * 100)}%` : `正在下载到本地 ${(d.received / 1048576).toFixed(1)} MB`;
+      }).then(local => {
+        if (current()) Views.loadStage(stage, local, startSec, opts);
+      }).catch(error => {
+        if (!current()) return;
+        stage.innerHTML = `<div class="stage-empty"><p>下载失败：${esc(error.message)}</p><button class="btn">重试下载</button></div>`;
+        stage.querySelector('button').onclick = () => Views.loadStage(stage, Store.videoById(video.id), startSec, opts);
+      });
+      return;
+    }
     const node = Bilibili.playerNode(video, startSec, opts?.autoplay === true);
     if (node) {
-      if (video.source === 'local') {
-        node.addEventListener('error',()=>{
-          if(typeof UX==='undefined'||!node.isConnected)return;
-          const info=document.createElement('div');info.className='card';info.innerHTML='<p>视频无法读取，可能已移动或格式不支持。</p><button class="btn">重新定位本地文件</button>';node.after(info);
-          info.querySelector('button').onclick=async()=>{const picked=await native.pickLocalVideo();if(!picked)return;if(!/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(picked.path)){toast('请选择视频文件','red');return;}video.localPath=picked.path;video.playbackVerified=false;Store.save(true);Views.loadStage(stage,video,Session.active?.mediaPosition||0);};
-        },{once:true});
+      if (node.tagName === 'VIDEO') {
+        if (video.source === 'local') {
+          node.addEventListener('error',()=>{
+            if(typeof UX==='undefined'||!node.isConnected)return;
+            const info=document.createElement('div');info.className='card';info.innerHTML='<p>视频无法读取，可能已移动或格式不支持。</p><button class="btn">重新定位本地文件</button>';node.after(info);
+            if (video.douyinId) {
+              info.querySelector('p').textContent = '本地视频已丢失或无法播放，可以重新下载。';
+              info.querySelector('button').textContent = '重新下载抖音视频';
+              info.querySelector('button').onclick = () => { video.source = 'douyin'; delete video.localPath; Views.loadStage(stage, video, Session.active?.mediaPosition || 0, opts); };
+              return;
+            }
+            info.querySelector('button').onclick=async()=>{const picked=await native.pickLocalVideo();if(!picked)return;if(!/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(picked.path)){toast('请选择视频文件','red');return;}video.localPath=picked.path;Store.rememberVideoPath(video);video.playbackVerified=false;Store.save(true);Views.loadStage(stage,video,Session.active?.mediaPosition||0);};
+          },{once:true});
+        }
         const sync = () => {
           if (!node.isConnected || Session.active?.videoId !== video.id) return;
           App.applyMediaState(!node.paused && !node.ended && !node.seeking && node.readyState >= 3);
         };
         for (const name of ['playing','pause','waiting','seeking','seeked','ended','error','emptied']) node.addEventListener(name, sync);
+        node.addEventListener('ended', () => {
+          if (node.isConnected && typeof Routine !== 'undefined' && Routine.active?.stage === 'training' && Routine.active.videoId === video.id) Routine.finishTraining();
+        });
       }
       stage.appendChild(node);
     } else stage.innerHTML = '<div class="stage-empty">视频无法播放</div>';
@@ -444,23 +568,29 @@ const Views = {
   syncTimerUI(root) {
     const big = $('#t-big', root), toggle = $('#t-toggle', root), stop = $('#t-stop', root), meta = $('#t-meta', root);
     if (!big) return;
+    const mode = Session.active?.mode || Store.currentMode?.() || 'face';
+    const watching = mode !== 'face';
     const comp = $('#t-complete', root);
     if (Session.active) {
       big.textContent = fmtSeconds(Session.active.seconds);
       if (Session.active.awaitingPlay) {
         toggle.textContent = '▶ 播放视频';
         stop.disabled = false;
+        stop.textContent = '结束（不记录）';
         meta.innerHTML = '点击视频或「播放视频」开始，计时将跟随实际播放；加载、暂停和缓冲时不计时';
       } else {
         toggle.textContent = Session.active.running ? '⏸ 暂停视频' : '▶ 继续播放';
-        const day = Store.dayTraining(todayKey());
-        const target = Store.settings().dailyTargetMinutes || 15;
+        stop.textContent = '✓ 结束并记录';
+        const day = watching ? Store.dayWatching(todayKey(), mode) : Store.dayTraining(todayKey());
+        const target = watching && Store.watchingTarget ? Store.watchingTarget(todayKey(),mode) : Store.settings().dailyTargetMinutes || 15;
         const autoNote = Session.active.autoPausedBy === 'background'
           ? '<br>🛌 窗口切到后台，已自动暂停计时与视频；回到应用自动继续'
           : Session.active.autoPausedBy === 'media'
             ? '<br>⏸ 检测到视频暂停，计时已同步暂停；视频继续后计时自动恢复'
             : '';
-        meta.innerHTML = `本次跟练中 · 今日累计 <b>${Math.round(day.seconds / 60)}</b> / ${target} 分钟${autoNote}<br>目标达成后成就地图会点亮今天 🟩`;
+        meta.innerHTML = watching
+          ? `${Session.active.running ? '正在观看' : '观看已暂停'} · 本板块今日累计 <b>${Math.round(day.seconds / 60)}</b> / ${target} 分钟${autoNote}`
+          : `本次跟练中 · 今日累计 <b>${Math.round(day.seconds / 60)}</b> / ${target} 分钟${autoNote}<br>目标达成后成就地图会点亮今天 🟩`;
       }
       if (comp) comp.hidden = Session.active.awaitingPlay;
       /* 完播进度条：实时显示距「完整跟练」还差多少 */
@@ -473,13 +603,14 @@ const Views = {
           comp.hidden = false;
           const fill = $('#t-complete-fill', root), text = $('#t-complete-text', root);
           if (fill) fill.style.width = pct + '%';
-          if (text) text.textContent = pct >= 100 ? '✅ 已达完整跟练门槛' : `完整进度 ${pct}% · 还差 ${left} 分钟`;
+          if (text) text.textContent = pct >= 100 ? `✅ 已达到完整${watching ? '观看' : '跟练'}门槛` : `完整${watching ? '观看' : '跟练'}门槛 ${pct}% · 还差 ${left} 分钟`;
         } else comp.hidden = true;
       }
     } else {
-      toggle.textContent = '▶ 开始跟练';
+      toggle.textContent = `▶ ${watching ? '开始观看' : '开始跟练'}`;
       stop.disabled = true;
-      meta.textContent = '选择视频后点击「开始跟练」';
+      stop.textContent = '✓ 结束并记录';
+      meta.textContent = `选择视频后点击「${watching ? '开始观看' : '开始跟练'}」`;
       if (comp) comp.hidden = true;
     }
     App.updateMiniBar();
@@ -493,7 +624,7 @@ const Views = {
         <details class="pl-quick-fold" id="pl-quick-fold">
           <summary class="pl-quick-fold-btn">⚡ 快捷导入</summary>
           <div class="pl-quick-fold-panel">
-            <p class="pl-quick-fold-lead">一行一条。有 B 站链接或 BV 号会自动绑到该条；不写时间默认 21:30，不写星期默认每天。</p>
+            <p class="pl-quick-fold-lead">一行一条。有 B 站链接 / BV 号或抖音链接（分享口令可整段粘贴）会自动绑到该条；不写时间默认 21:30，不写星期默认每天。</p>
             <textarea class="textarea" id="pl-quick" rows="4" aria-label="跟练计划文本"
               placeholder="瘦脸操10分钟 21:30 每天 https://www.bilibili.com/video/BVxxxxxx&#10;晨间面部唤醒3分钟 07:40 工作日 BVxxxxxxxxxx"></textarea>
             <div class="row">
@@ -527,8 +658,8 @@ const Views = {
               <input class="input" id="pl-fixed-min" type="number" min="1" max="300" value="${(() => { const fx = Store.db.sessions.find(x => x.fixedDaily); return fx ? fx.targetMinutes : s.dailyTargetMinutes; })()}" style="width:110px"></div>
             <button class="btn green" id="pl-fixed-apply">⏱️ 应用为每日固定安排</button>
           </div>
-          <p class="hint" style="margin-top:8px">模板用法：比如你想「每天都练 20 分钟」——时间填 21:30、时长填 20，点一下按钮，就生成一个每天都进行的固定安排（已存在则原地更新），每日目标也同步成 20 分钟，成就日历按它点亮。其它安排不受影响。</p>
-          <p class="hint" style="margin-top:6px">提醒方式：到点后系统通知 + 应用内确认弹窗，点击即可进入沉浸式跟练。保持应用在托盘运行即可收到提醒。</p>
+          <p class="hint" style="margin-top:8px">想每天练 20 分钟？填好时间和时长后，点「应用为每日固定安排」。已有固定安排会更新，每日目标也会同步调整；完成当天目标后，成就日历会点亮当天。其他安排不受影响。</p>
+          <p class="hint" style="margin-top:6px">启用提醒并保持应用运行后，到点会收到系统通知；在应用内确认即可进入跟练。</p>
         </div>
 
         <div class="card">
@@ -538,7 +669,7 @@ const Views = {
         </div>
 
         <div class="card">
-          <h3>🔔 提醒中枢 <span class="h-extra">今天会响哪几次，一眼看全</span>
+          <h3>🔔 提醒中枢 <span class="h-extra">查看已设置的提醒</span>
             <label class="row" style="gap:6px; margin-left:auto; font-size:12.5px; color:#4c5b70">
               <input type="checkbox" id="pl-dark" ${document.documentElement.classList.contains('dark') ? 'checked' : ''}> 🌙 夜间模式</label></h3>
         <div id="pl-hub" style="display:grid; gap:8px">
@@ -547,7 +678,7 @@ const Views = {
             const st2 = Store.settings();
             const st3 = Store.settings().skincareTimes || {};
             const rows = [];
-            rows.push(`<div class="st-history-row"><div class="t-name"><b>⏰ 训练会话提醒</b><span>${ss.length ? ss.map(x => `${x.name} ${x.time}`).join(' · ') : '未设置训练安排'}</span></div><span class="tag">每日</span></div>`);
+            rows.push(`<div class="st-history-row"><div class="t-name"><b>⏰ 跟练安排提醒</b><span>${ss.length ? ss.map(x => `${x.name} ${x.time}`).join(' · ') : '未设置跟练安排'}</span></div><span class="tag">按安排日期</span></div>`);
             rows.push(`<div class="st-history-row"><div class="t-name"><b>🧴 护肤三时段</b><span>晨间 ${st3.morning || '09:00'} · 日间 ${st3.noon || '12:00'} · 晚间 ${st3.evening || '20:00'}（该时段有步骤且未完成才提醒）</span></div><span class="tag">每日</span></div>`);
             rows.push(`<div class="st-history-row"><div class="t-name"><b>📝 皮肤状态记录</b><span>${st2.skinLogReminderTime ? `每晚 ${st2.skinLogReminderTime}（当天已记录则不打扰）` : '已关闭——可在护肤页重新开启'}</span></div><button class="btn small ghost" id="hub-skin" data-no-icon="true">去护肤页调整</button></div>`);
             rows.push(`<div class="st-history-row"><div class="t-name"><b>😴 睡眠记录提醒</b><span>${st2.sleepLogReminderTime ? `每天 ${st2.sleepLogReminderTime}（昨晚已记则不打扰）` : '已关闭'} · 在「设置 → 提醒」里调时间</span></div><span class="tag">每日</span></div>`);
@@ -576,7 +707,7 @@ const Views = {
         }
         $('#pl-quick', root).value = '';
         App.render();
-        toast(`导入完成：${r.sessions} 个安排、${r.videos} 个新视频 ✓`, 'green');
+        PlanImporter.resultToasts(r).forEach(t => toast(t.msg, t.type));
       } catch (error) {
         toast(`导入失败：${error.message || error}`, 'red');
       } finally {
@@ -681,10 +812,11 @@ const Views = {
         ${WD.map((w, i) => `<span data-d="${i}" class="${(s.days || []).includes(i) ? 'on' : ''}" style="cursor:pointer; width:34px; height:30px; font-size:13px">${w}</span>`).join('')}
       </div>
       <label class="field">跟练视频（与该安排绑定，到点提醒直达）</label>
+      <label class="routine-option"><input type="checkbox" id="sm-auto"${s.autoStart ? ' checked' : ''}>到点全屏自动播放，结束后进入护肤流程</label>
       <div class="row">
         <select class="select" id="sm-video" style="flex:1">
           <option value="">（不绑定，跟练时自选）</option>
-          ${Store.db.videos.map(v => `<option value="${v.id}" ${s.videoId === v.id ? 'selected' : ''}>${esc(v.title)}</option>`).join('')}
+          ${Store.videosForMode('face').map(v => `<option value="${v.id}" ${s.videoId === v.id ? 'selected' : ''}>${esc(v.title)}</option>`).join('')}
         </select>
         <div class="sm-preview" id="sm-preview"></div>
       </div>
@@ -720,11 +852,13 @@ const Views = {
         time: $('#sm-time', card).value || '21:30',
         days: $$('#sm-days .on',card).map(x=>Number(x.dataset.d)).sort(),
         videoId: $('#sm-video', card).value || null,
+        autoStart: $('#sm-auto', card).checked,
         targetMinutes: Math.max(1, +$('#sm-min', card).value || 15),
         enabled: s.enabled !== false, // 编辑已停用的安排不得悄悄复活提醒
         ...(s.fixedDaily ? { fixedDaily: true } : {})
       };
       if (!obj.days.length) { toast('至少选择一周中的一天', 'red'); return; }
+      if (obj.autoStart && !obj.videoId) { toast('自动播放需要先绑定一个视频', 'red'); return; }
       if (s.id) {
         const i = Store.db.sessions.findIndex(x => x.id === s.id);
         if (i >= 0) Store.db.sessions[i] = obj;
@@ -749,7 +883,7 @@ const Views = {
         <label class="field" style="flex:1">开始<input class="input" id="te-start" type="time" value="${esc(en.start || '')}"></label>
         <label class="field" style="flex:1">结束<input class="input" id="te-end" type="time" value="${esc(en.end || '')}"></label>
       </div>
-      <p class="hint" style="margin-top:8px">${video && video.durationSec ? `该视频完整门槛：${Math.round(followCompletion(0, video.durationSec).threshold / 60 * 10) / 10} 分钟（80% 时长）。` : '该视频无时长数据，完整门槛 3 分钟。'}</p>
+      <p class="hint" style="margin-top:8px">${video && video.durationSec ? `该视频完整门槛：${Math.round(followCompletion(0, video.durationSec).threshold / 60 * 10) / 10} 分钟（视频时长的 80% 与 2 分钟取较高值）。` : '该视频无时长数据，完整门槛 3 分钟。'}</p>
       <div class="row" style="justify-content:space-between; margin-top:14px">
         <button class="btn danger" id="te-del">删除这条记录</button>
         <span style="flex:1"></span>
@@ -823,7 +957,7 @@ const Views = {
           { lv: 2, need: 21, name: '廿一养成' },
           { lv: 3, need: 66, name: '六十六习惯' }
         ] },
-      { key: 'day30', group: 'follow', ico: '✨', name: '单日冲量', desc: '单日跟练练满 30 分钟',
+      { key: 'day30', group: 'follow', ico: '✨', name: '单日冲量', desc: '单日累计跟练时长满 30 分钟（含手动补记）',
         unit: '分钟', value: maxDayMin,
         tiers: [ { lv: 1, need: 30, name: '超额完成' } ] },
       { key: 'first', group: 'follow', ico: '🌱', name: '初次打卡', desc: '完成第一次训练',
@@ -920,7 +1054,7 @@ const Views = {
         <div class="card">
           <h3>🏅 成就等级 <span class="h-extra">系列随累计次数升等级 · 已达成 ${gotLv} / ${totalLv} 级</span></h3>
           ${grouped}
-          <p class="hint" style="margin:10px 0 0">「完整跟练」按有效计时 ≥ 视频时长 80% 判定（点开不算）；等级只增不减，「连续达标」取历史最长连续。数字都从已有记录里算。</p>
+          <p class="hint" style="margin:10px 0 0">「完整跟练」需有效计时达到视频时长的 80%，且至少 2 分钟；没有视频时长时按 3 分钟判定。等级与「历史最长连续」均按当前记录计算，删除或修改记录后可能变化。</p>
         </div>
       </div>`;
 

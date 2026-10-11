@@ -5,13 +5,14 @@ const util = require('../src/js/util');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
+const StoreCore = require('../src/js/store');
 
-function makeImporter() {
+function makeImporter(fetchImpl) {
   const db = { videos: [], sessions: [], settings: {} };
   const sandbox = {
     uid: util.uid, pad2: util.pad2, daysBetween: util.daysBetween, todayKey: util.todayKey,
-    Store: { db, save() {} },
-    console, window: { native: { fetchBilibiliInfo: async bvid => ({ ok: true, title: bvid, cid: 1 }) } }
+    Store: Object.assign(Object.create(StoreCore), { db, save() {} }),
+    console, window: { native: { fetchBilibiliInfo: fetchImpl || (async bvid => ({ ok: true, title: bvid, cid: 1 })) } }
   };
   vm.createContext(sandbox);
   const code = fs.readFileSync(path.join(__dirname, '..', 'src', 'js', 'templates.js'), 'utf-8')
@@ -67,4 +68,43 @@ test('纯视频链接只加入视频库，不创建默认安排', async () => {
   assert.equal(r.videos, 1);
   assert.equal(r.sessions, 0);
   assert.equal(PI.db.sessions.length, 0);
+});
+
+test('抓取失败仍保存引用，结果标记待核实链接；成功时不标记', async () => {
+  const PI = makeImporter(async bvid => bvid === 'BV1s411o776X'
+    ? { ok: false, error: '啥都木有' } : { ok: true, title: '标题' + bvid, cid: 9 });
+  const r1 = await PI.importLines('晚间跟练 21:30 每天 BV1s411o776X');
+  assert.equal(r1.videos, 1, '失败链接仍进入视频库（仅保存引用）');
+  assert.deepEqual(Array.from(r1.pendingRefs), ['BV1s411o776X'], '失败链接应出现在 pendingRefs');
+  assert.equal(PI.db.videos[0].title, 'BV1s411o776X', '标题回退为 BV 号');
+  assert.equal(PI.db.videos[0].cid, null, '无 cid');
+  const r2 = await PI.importLines('晚间跟练2 21:30 每天 BV1GJ411x7h7');
+  assert.deepEqual(Array.from(r2.pendingRefs), [], '抓取成功不标记');
+});
+
+test('待核实标记同样适用于 av 号引用', async () => {
+  const PI = makeImporter(async () => ({ ok: false, error: '请求超时' }));
+  const r = await PI.importLines('晚间跟练 21:30 每天 av170001');
+  assert.equal(r.videos, 1);
+  assert.deepEqual(Array.from(r.pendingRefs), ['av170001']);
+});
+
+test('resultToasts：成功路径文案不变，有待核实时追加含链接的提示', () => {
+  const PI = makeImporter();
+  const ok = PI.resultToasts({ sessions: 1, videos: 2, pendingRefs: [] });
+  assert.equal(ok.length, 1);
+  assert.equal(ok[0].msg, '导入完成：1 个安排、2 个新视频 ✓');
+  assert.equal(ok[0].type, 'green');
+  /* 旧调用方不传 pendingRefs 时也必须走原文案（兼容；逐字段断言避免 vm realm 原型差异） */
+  const legacy = PI.resultToasts({ sessions: 0, videos: 1 });
+  assert.equal(legacy.length, 1);
+  assert.equal(legacy[0].msg, '导入完成：0 个安排、1 个新视频 ✓');
+  assert.equal(legacy[0].type, 'green');
+
+  const warn = PI.resultToasts({ sessions: 1, videos: 1, pendingRefs: ['BV1s411o776X'] });
+  assert.equal(warn.length, 2);
+  assert.ok(warn[1].msg.includes('待核实') && warn[1].msg.includes('BV1s411o776X'), warn[1].msg);
+
+  const many = PI.resultToasts({ sessions: 0, videos: 4, pendingRefs: ['BV1a', 'BV1b', 'BV1c', 'BV1d'] });
+  assert.ok(many[1].msg.includes('BV1a、BV1b、BV1c') && many[1].msg.includes('等 4 个'), '超过 3 个截断展示');
 });

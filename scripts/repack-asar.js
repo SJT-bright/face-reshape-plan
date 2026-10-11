@@ -1,17 +1,21 @@
 #!/usr/bin/env node
 /**
- * repack-asar.js —— 把源码改动快速打进 dist/mac-arm64/面部重塑计划.app
- * 用法：node scripts/repack-asar.js
+ * repack-asar.js —— 把源码改动快速打进 dist/mac-arm64/人生重塑计划.app（兼容旧名称）
+ * 用法：node scripts/repack-asar.js [--app /path/to/人生重塑计划.app]
  * 内容清单与 electron-builder 产物一致：main.js / preload.js / package.json / assets / src
- * 说明：该 app 为 linker-signed（无资源封签），替换 asar 后无需重签、直接可启动。
+ * 说明：重打 asar 后必须同步 Info.plist 的头部哈希并重签。
  *       新增 npm 依赖或改 electron-builder 配置时，仍请用 npm run dist:mac -- --dir。
  */
 const path = require('path');
 const fs = require('fs');
 const asar = require('@electron/asar');
+const { execFileSync } = require('node:child_process');
+const { syncMacAsarIntegrity } = require('./sync-asar-integrity');
+const { resolveAppPath, syncDisplayName } = require('./deploy-app-asar');
 
 const root = path.resolve(__dirname, '..');
-const appDir = path.join(root, 'dist', 'mac-arm64', '面部重塑计划.app');
+const argApp = process.argv.indexOf('--app');
+const appDir = resolveAppPath(path.join(root, 'dist', 'mac-arm64'), argApp > -1 ? process.argv[argApp + 1] : null);
 const asarPath = path.join(appDir, 'Contents', 'Resources', 'app.asar');
 const stage = path.join(root, '.repack-stage');
 const ENTRIES = ['main.js', 'preload.js', 'package.json', 'assets', 'src'];
@@ -19,6 +23,8 @@ const ENTRIES = ['main.js', 'preload.js', 'package.json', 'assets', 'src'];
 const EXCLUDES = [path.join('src', 'assets', '3d', 'originals')];
 
 async function main() {
+  if (argApp > -1 && !process.argv[argApp + 1]) throw new Error('--app 后需要指定 .app 路径');
+  if (!fs.existsSync(asarPath)) throw new Error(`找不到 ${asarPath}；请先运行 npm run dist:mac -- --dir`);
   // 从项目源码直接构建 asar（内容清单与 electron-builder 产物一致）
   fs.rmSync(stage, { recursive: true, force: true });
   fs.mkdirSync(stage, { recursive: true });
@@ -34,6 +40,11 @@ async function main() {
   try {
     await asar.createPackageWithOptions(stage, asarPath, {});
     console.log('已重写 app.asar');
+    syncDisplayName(appDir);
+    const hash = syncMacAsarIntegrity(appDir);
+    execFileSync('codesign', ['--force', '--deep', '--sign', '-', '--', appDir], { stdio: 'inherit' });
+    execFileSync('codesign', ['--verify', '--deep', '--strict', '--', appDir], { stdio: 'inherit' });
+    console.log('已同步完整性记录并重签，asar 头部 SHA256=' + hash);
   } catch (e) {
     console.error('打包失败，暂存目录保留在', stage);
     throw e;

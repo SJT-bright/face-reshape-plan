@@ -121,3 +121,10 @@ test('findings 排序：avoid > caution > info', () => {
   const ranks = r.findings.map(f => ({ avoid: 3, caution: 2, info: 1 }[f.severity]));
   for (let i = 1; i < ranks.length; i++) assert.ok(ranks[i - 1] >= ranks[i], '应按等级降序排列');
 });
+
+test('VC × 酸同场才报 R-VC-ACID；维A × VC 不冒用这条', () => {
+  const acidVc = K.analyzeMix(mix([], ['修丽可CE精华', '果酸面膜']));
+  assert.ok(acidVc.findings.some(f => f.rule === 'R-VC-ACID'), '晚间维C + 果酸应出现 R-VC-ACID');
+  const vaVc = K.analyzeMix(mix([], ['修丽可CE精华', 'A醇精华']));
+  assert.ok(!vaVc.findings.some(f => f.rule === 'R-VC-ACID'), '晚间维C + A醇不应出现 R-VC-ACID');
+});

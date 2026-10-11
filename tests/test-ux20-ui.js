@@ -42,7 +42,9 @@ win.webContents.once('did-finish-load',async()=>{
   await js('Store.flushSync()');win.webContents.reload();await wait("typeof Store!=='undefined'&&Store.db&&document.querySelector('#ux-now')");await js("App.go('skincare')");assert.equal(await js("document.querySelector('#sk-skin-note').value"),'重启草稿');
   // Shared quick forms, real writes, and keyboard dismissal protect drafts.
   await js("App.go('today');document.querySelector('#ux-sleep').click()");await sleep(100);
-  await js("const f=document.querySelector('#rh-sleep-form');f.elements.bed.value='23:00';f.elements.wake.value='07:00';f.elements.awakeMin.value='25';f.elements.complete.checked=true;f.requestSubmit();");
+  /* 1.8.4 睡眠表单改为「时长 + 分数」直填（hours/minutes/qScore），不再有 bed/wake/awakeMin 时间差字段；
+     仍驱动同一条 7h35m=455 分钟的记录，保持后续 sleepMinutes 断言不变。 */
+  await js("const f=document.querySelector('#rh-sleep-form');Rhythm.selectedDay=todayKey();f.elements.hours.value='7';f.elements.minutes.value='35';f.elements.qScore.value='80';f.elements.complete.checked=true;f.requestSubmit();");
   await wait("Store.db.rhythm.sleeps.length===1&&!Rhythm.busy");assert.equal(await js('RhythmEngine.sleepMinutes(Store.db.rhythm.sleeps[0])'),455);
   await js("App.go('today');document.querySelector('#ux-skin').click()");await sleep(100);
   await js("document.querySelector('#modal-card #sk-acne-total').value='2';document.querySelector('#modal-card #sk-skin-save').click()");await wait("!!Store.db.skin.logs[todayKey()]");
@@ -100,7 +102,9 @@ win.webContents.once('did-finish-load',async()=>{
   win.webContents.reload();await wait("typeof UX!=='undefined'&&Store.db&&document.querySelector('#ux-now')");assert.equal(await js("(await native.reminderList()).find(x=>x.kind==='review').state"),'稍后提醒');
   await js("UX.reminders()");await wait("document.querySelector('[data-act=skip]')");await js("document.querySelector('[data-act=skip]').click()");await sleep(150);await shot('UX-13-reminder-timeline');await js('closeModal()');
   // The real system encryption API is exercised only with a synthetic non-credential.
-  const keyState=await js('native.keyStatus()');assert.equal(keyState.available,true,'macOS secure storage available in this environment');
+  /* 1.8.4 起 keyStatus 不再探测钥匙串（避免临时签名触发系统授权弹窗阻塞主进程），available 恒为 null；
+     真实可用性由下一行的加密写入 + 回读 + 密文校验证明。 */
+  const keyState=await js('native.keyStatus()');assert.equal(keyState.available,null,'status lookup does not probe Keychain by design');
   assert.equal((await js("native.saveApiKey('synthetic-ux20-not-a-real-key')")).ok,true);assert.equal(fs.readFileSync(path.join(profile,'ai-key.enc')).includes(Buffer.from('synthetic-ux20-not-a-real-key')),false);assert.equal((await js('native.loadData()')).settings.aiApiKey,undefined);await js("native.saveApiKey('')");
   // Relocation changes only the file reference, retaining plan and history identity. Playback is separately tested with a real local fixture.
   const relocated=path.join(profile,'relocated.webm');fs.writeFileSync(relocated,'reference-only-fixture');dialog.showOpenDialog=async()=>({canceled:false,filePaths:[relocated]});

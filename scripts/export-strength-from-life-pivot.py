@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """从「个人积累库」(Life Pivot) 的 SQLite 库导出力量训练板块，
-生成本应用「面部重塑计划 → 力量训练 → 导入历史数据」所需的单一合法 JSON。
+生成本应用「人生重塑计划 → 力量训练 → 导入历史数据」所需的单一合法 JSON。
 
 用法（只读打开源库，绝不写入）：
     python3 scripts/export-strength-from-life-pivot.py "源库路径.sqlite" > 力量训练.json

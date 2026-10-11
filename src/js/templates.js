@@ -1,23 +1,19 @@
-/* 科学计划模板：基于行为科学与面部训练研究
-   依据：
-   - Northwestern 大学 RCT (JAMA Dermatology 2018, PMC5885810)：面部运动 30分钟/天×8周后改隔天，共20周，外观年轻约3岁
-   - 执行意图 "如果-那么" 计划 (Gollwitzer & Sheeran 2006 元分析 d=.65; Milne 2002: 执行率 91% vs 35%)
-   - 习惯自动化中位数 66 天 (Lally 2009; Singh 2024 综述)
-   设计原则：小起步 → 渐进加量 → 固定锚点 → 即时反馈（点亮日历）→ 允许偶尔失手 */
+/* 可编辑的跟练时间模板。面部训练效果证据有限；这些时长只是日程预设，
+   不作为疗效、安全强度或个人训练量的承诺。 */
 
 const TEMPLATES = [
   {
     id: 'tpl_starter_14',
     name: '新手启动 · 14天',
-    tag: '先建立"到点就练"的条件反射',
+    tag: '从短时间开始，建立固定日程',
     weeks: 2,
     accent: '#22c55e',
-    description: '从 5 分钟的极小剂量起步（小到不可能失败），第 2 周翻倍到 10 分钟。适合从零开始、怕坚持不下来的人。',
+    description: '第 1 周每天安排 5 分钟，第 2 周安排 10 分钟。适合刚开始建立跟练习惯的人；时间与提醒都可以调整。',
     principles: [
-      '两分钟法则：起步剂量小到无法拒绝（Atomic Habits）',
-      '执行意图：固定 21:30 锚点，到点提醒自动触发（执行率 91% vs 35%）',
-      '渐进加量：每周约 +100%，新手安全区间',
-      '即时反馈：完成即点亮成就日历'
+      '先从短时间开始，按自己的状态调整',
+      '默认 21:30 提醒，可在跟练计划中修改',
+      '第 2 周的预设目标由 5 分钟增至 10 分钟',
+      '当天累计达到目标后，成就日历会点亮'
     ],
     phases: [
       {
@@ -39,15 +35,15 @@ const TEMPLATES = [
   {
     id: 'tpl_progress_28',
     name: '进阶重塑 · 28天',
-    tag: '向研究剂量靠拢，强度渐进',
+    tag: '逐周增加预设时长',
     weeks: 4,
     accent: '#f472b6',
-    description: '按"渐进超负荷"每周加量：10 → 15 → 20 分钟，第 4 周加入周六 30 分钟深度塑形，向研究用的 30 分钟剂量过渡。',
+    description: '每日目标逐周按 10、15、20、25 分钟预设；第 4 周另有周六 30 分钟安排。可按自己的状态调整。',
     principles: [
-      '渐进超负荷：每周 +5 分钟，给肌肉与习惯同步加压',
-      '研究参照：西北大学 RCT 用 30 分钟/天 × 8 周观察到效果',
-      '周末加练：周六 30 分钟深度课，周中保持轻量',
-      '执行意图：晚 21:30 固定锚点 + 到点系统通知'
+      '每周目标逐步增加，不必硬追预设时长',
+      '训练安排和每日目标都可以自行修改',
+      '第 4 周增设周六 30 分钟跟练',
+      '默认 21:30 提醒，可在跟练计划中修改'
     ],
     phases: [
       {
@@ -84,15 +80,15 @@ const TEMPLATES = [
   {
     id: 'tpl_daily_long',
     name: '日常维持 · 长期',
-    tag: '轻量长期，习惯自动化',
+    tag: '用固定时段维持日程',
     weeks: 0,
     accent: '#a78bfa',
-    description: '每天 15 分钟晚间跟练 + 工作日 3 分钟晨间唤醒，长期保持。习惯自动化平均需要 66 天，别急，慢慢来。',
+    description: '每天安排 15 分钟晚间跟练，工作日早上另安排 3 分钟。适合希望维持固定日程的人；可以随时调整。',
     principles: [
-      '研究维持期剂量：20 周研究中后期为隔天 30 分钟，日常 15 分钟是可持续折衷',
-      '习惯叠加：晨间唤醒挂在"刷牙后"这个既有习惯后面',
-      '66 天法则：自动化中位数 66 天（18~254 天区间），漏一天不打断连续',
-      '长期视角：目标是"不中断"，不是"练到力竭"'
+      '晚间与晨间安排可分别调整或关闭',
+      '晨间提醒可以放在刷牙后等固定时段',
+      '漏练后可从下一次继续，日历会如实记录',
+      '以适合自己的节奏维持日程'
     ],
     phases: [
       {
@@ -172,15 +168,15 @@ const PlanTemplate = {
 };
 
 /* ---------- 训练计划快捷导入：一行一个安排 ----------
-   支持格式：瘦脸操10分钟 21:30 每天 BV1xxxx / 完整链接
-   可识别：时间 HH:MM、时长 N分钟、每天/工作日/周末/周一~周日、视频链接或BV号 */
+   支持格式：瘦脸操10分钟 21:30 每天 BV1xxxx / 完整链接 / 抖音链接或分享口令
+   可识别：时间 HH:MM、时长 N分钟、每天/工作日/周末/周一~周日、视频链接或BV号（B 站 / 抖音） */
 const PlanImporter = {
   parseLine(line) {
     let s = line.trim();
     if (!s || s.startsWith('#') || s.startsWith('//')) return null;
     const out = { name: s, time: null, targetMinutes: null, days: null, videoRef: null };
 
-    // 视频（链接 / BV号 / av号）
+    // 视频（链接 / BV号 / av号 / 抖音链接或分享口令）
     const bv = s.match(/BV[0-9A-Za-z]{10}/);
     const av = s.match(/av(\d{3,})/i);
     const url = s.match(/https?:\/\/\S+/);
@@ -192,8 +188,15 @@ const PlanImporter = {
       if (b2) out.videoRef = { type: 'bv', val: b2[0] };
       else if (a2) out.videoRef = { type: 'av', val: a2[1] };
     }
+    else if (/douyin\.com|iesdouyin\.com/i.test(s)) {
+      /* 抖音：分享口令噪声多，交给 Douyin.parse 提取链接（含不带 https:// 的短链）；
+         短链此时还解析不出 vid，val 暂存 URL，vid 由主进程重定向解析。 */
+      const d = (typeof Douyin !== 'undefined') ? Douyin.parse(s) : null;
+      if (d) out.videoRef = { type: 'douyin', val: d.vid || d.url, url: d.url, vid: d.vid, title: d.title };
+    }
     // 只有视频链接的行只加入视频库，不凭空创建一个默认时间的训练安排。
     out.videoOnly = !!out.videoRef && !s
+      .replace(/(?:https?:\/\/)?(?:v\.|www\.|m\.)?(?:douyin|iesdouyin)\.com\/\S+/g, '')
       .replace(/https?:\/\/\S+/g, '')
       .replace(/BV[0-9A-Za-z]{10}/g, '')
       .replace(/av\d{3,}/gi, '').trim();
@@ -220,6 +223,7 @@ const PlanImporter = {
 
     // 清洗名称：去掉时间/时长/星期/视频/分隔符（开头的"周X/周X末"属于名字的一部分，保留）
     out.name = s
+      .replace(/(?:https?:\/\/)?(?:v\.|www\.|m\.)?(?:douyin|iesdouyin)\.com\/\S+/g, '')
       .replace(/https?:\/\/\S+/g, '')
       .replace(/BV[0-9A-Za-z]{10}/g, '')
       .replace(/av\d{3,}/gi, '')
@@ -256,23 +260,40 @@ const PlanImporter = {
     const needFetch = [];
     for (const r of rows) {
       if (!r.videoRef) continue;
-      const exist = Store.db.videos.find(v =>
+      const exist = Store.videosForMode('face').find(v =>
         (r.videoRef.type === 'bv' && v.bvid === r.videoRef.val) ||
-        (r.videoRef.type === 'av' && v.aid === r.videoRef.val));
-      if (exist) { r.videoId = exist.id; }
+        (r.videoRef.type === 'av' && v.aid === r.videoRef.val) ||
+        (r.videoRef.type === 'douyin' && r.videoRef.vid && v.douyinId === r.videoRef.vid) ||
+        (r.videoRef.type === 'douyin' && !r.videoRef.vid && v.douyinUrl === r.videoRef.url));
+      if (exist) {
+        if (r.videoRef.type === 'douyin') await Douyin.ensureLocal(exist);
+        r.videoId = exist.id;
+      }
       else needFetch.push(r);
     }
     let vi = 0;
     let importedVideos = 0;
+    const pendingRefs = []; /* 抓取失败但已保存引用的链接：导入反馈需要与成功获取信息的区分开 */
     for (const r of needFetch) {
       vi++;
       /* 同批两行同 BV：先拉的那条入库后，后续行直接复用，不再重复请求与入库 */
-      const dup = Store.db.videos.find(v =>
+      const dup = Store.videosForMode('face').find(v =>
         (r.videoRef.type === 'bv' && v.bvid === r.videoRef.val) ||
-        (r.videoRef.type === 'av' && v.aid === r.videoRef.val));
-      if (dup) { r.videoId = dup.id; continue; }
+        (r.videoRef.type === 'av' && v.aid === r.videoRef.val) ||
+        (r.videoRef.type === 'douyin' && r.videoRef.vid && v.douyinId === r.videoRef.vid) ||
+        (r.videoRef.type === 'douyin' && !r.videoRef.vid && v.douyinUrl === r.videoRef.url));
+      if (dup) { if (r.videoRef.type === 'douyin') await Douyin.ensureLocal(dup); r.videoId = dup.id; continue; }
       if (onProgress) onProgress(vi, needFetch.length, `获取视频信息：${r.videoRef.val}`);
+      if (r.videoRef.type === 'douyin') {
+        const v = await Douyin.importLocal({vid:r.videoRef.vid,url:r.videoRef.url,title:r.videoRef.title}, 'face', d => {
+          if(onProgress) onProgress(vi,needFetch.length,d.total?`下载中：${Math.floor(d.received/d.total*100)}%`:`下载中：${(d.received/1048576).toFixed(1)} MB`);
+        });
+        r.videoId = v.id;
+        importedVideos++;
+        continue;
+      }
       const info = await window.native.fetchBilibiliInfo(r.videoRef.type === 'bv' ? r.videoRef.val : ('av' + r.videoRef.val));
+      if (!(info && info.ok)) pendingRefs.push(r.videoRef.type === 'bv' ? r.videoRef.val : ('av' + r.videoRef.val));
       const v = {
         id: uid('vid'), source: 'bilibili',
         bvid: r.videoRef.type === 'bv' ? r.videoRef.val : null,
@@ -283,7 +304,7 @@ const PlanImporter = {
         durationSec: (info && info.ok) ? info.durationSec : null,
         addedAt: new Date().toISOString()
       };
-      Store.db.videos.push(v);
+      Store.addVideo(v, 'face');
       r.videoId = v.id;
       importedVideos++;
     }
@@ -303,6 +324,18 @@ const PlanImporter = {
       });
     }
     if (importedVideos || newSessions.length) Store.save(true);
-    return { sessions: newSessions.length, videos: importedVideos, skipped };
+    return { sessions: newSessions.length, videos: importedVideos, skipped, pendingRefs };
+  },
+
+  /* 导入结果 → 提示文案。成功路径保持原文案不变；有待核实链接时追加一条说明，
+     让用户知道哪些视频只保存了引用、未获取到标题/时长等信息。 */
+  resultToasts(r) {
+    const out = [{ msg: `导入完成：${r.sessions} 个安排、${r.videos} 个新视频 ✓`, type: 'green' }];
+    const refs = (r && r.pendingRefs) || [];
+    if (refs.length) {
+      const shown = refs.slice(0, 3).join('、') + (refs.length > 3 ? ` 等 ${refs.length} 个` : '');
+      out.push({ msg: `⚠️ ${refs.length} 个视频只保存了链接、未获取到信息，待核实：${shown}`, type: '' });
+    }
+    return out;
   }
 };

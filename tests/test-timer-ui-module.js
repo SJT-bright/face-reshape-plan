@@ -58,13 +58,13 @@ function freshState() {
 
 /* 真实 Strength 所依赖的 Store/App stub：db 指向隔离 state */
 let state;
-global.Store = { db: null, save() {} };
+global.Store = { db: null, save() { return true; } };
 global.App = { currentView: 'strength', render() {} };
 function bootWith(s) { state = s; global.Store.db = { strength: s }; }
 
 /* 构造 _saveActual 可读的动作行（1 个动作：4 组 × 10 次 × 40kg） */
 function saveRoot() {
-  const fields = { setsDone: { value: '4' }, repsText: { value: '10' }, weightKg: { value: '40' } };
+  const fields = { setsDone: { value: '4', dataset: { dirty: '1' } }, repsText: { value: '10', dataset: { dirty: '1' } }, weightKg: { value: '40', dataset: { dirty: '1' } } };
   const tr = {
     querySelector(sel) {
       if (sel === '.st-num') return {};

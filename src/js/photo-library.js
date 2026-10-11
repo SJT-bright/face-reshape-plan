@@ -7,16 +7,17 @@ const path = require('node:path');
 const KINDS = {
   skin: { project: '皮肤照片', isolated: 'skin-photos', archive: 'skin-photos' },
   body: { project: '健身照片', isolated: 'body-photos', archive: 'body-photos' },
+  meal: { project: '饮食照片', isolated: 'meal-photos', archive: 'meal-photos' },
   video: { project: '跟练视频', isolated: 'imported-videos', archive: 'imported-videos' }
 };
 const PHOTO_SUBFOLDER = KINDS.skin.project;
 const ANGLE = { front: '正面', left: '左侧', right: '右侧' };
-const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.heic']);
 const VIDEO_EXTS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.mkv', '.avi']);
 const VIDEO_COPY_LIMIT = 2 * 1024 * 1024 * 1024;
 
 function mediaKind(kind) {
-  if (kind === 'body' || kind === 'video') return kind;
+  if (kind === 'body' || kind === 'video' || kind === 'meal') return kind;
   return 'skin';
 }
 
@@ -43,7 +44,7 @@ function safeVideoName(name) {
 function isBundleRelPath(p) {
   const parts = String(p || '').split('/');
   if (parts.length !== 2) return false;
-  if (parts[0] === 'skin-photos' || parts[0] === 'body-photos') return !!safePhotoName(parts[1]);
+  if (['skin-photos','body-photos','meal-photos'].includes(parts[0])) return !!safePhotoName(parts[1]);
   return parts[0] === 'imported-videos' && !!safeVideoName(parts[1]);
 }
 
@@ -114,7 +115,7 @@ function assertPhotoDest(dir, photoDest) {
   return assertMediaDest(dir, photoDest, 'skin');
 }
 
-function adoptLooseFiles(dir, namer) {
+function adoptLooseFiles(dir, exts) {
   if (!dir || !fs.existsSync(dir)) return [];
   const names = [];
   for (const name of fs.readdirSync(dir)) {
@@ -122,24 +123,20 @@ function adoptLooseFiles(dir, namer) {
     let st;
     try { st = fs.lstatSync(src); } catch { continue; }
     if (!st.isFile() || st.isSymbolicLink()) continue;
-    const safe = namer(name);
-    if (!safe) continue;
-    if (safe !== name) {
-      const dst = path.join(dir, safe);
-      if (fs.existsSync(dst)) continue;
-      fs.renameSync(src, dst);
-    }
-    names.push(safe);
+    /* 目录里已有的普通媒体保持原名。安全改名只用于从外部复制进来。 */
+    if (!name || name.startsWith('.') || /[/\\]/.test(name)) continue;
+    if (!exts.has(path.extname(name).toLowerCase())) continue;
+    names.push(name);
   }
   return names;
 }
 
 function listImageFiles(dir) {
-  return adoptLooseFiles(dir, safePhotoName);
+  return adoptLooseFiles(dir, IMAGE_EXTS);
 }
 
 function listVideoFiles(dir) {
-  return adoptLooseFiles(dir, safeVideoName);
+  return adoptLooseFiles(dir, VIDEO_EXTS);
 }
 
 function uniqueName(dir, name, listed) {
@@ -243,13 +240,14 @@ function importExistingVideos(videos, destDir) {
 }
 
 function archiveForPhoto(kind) {
-  return spec(kind === 'body' ? 'body' : 'skin').archive;
+  return spec(['body','meal'].includes(kind) ? kind : 'skin').archive;
 }
 
-function locatePhotoFile(file, kind, skinDir, bodyDir) {
+function locatePhotoFile(file, kind, skinDir, bodyDir,mealDir) {
   const safe = safePhotoName(file);
   if (!safe) return null;
-  const primary = kind === 'body' ? bodyDir : skinDir;
+  const primary = kind==='meal' ? mealDir : kind === 'body' ? bodyDir : skinDir;
+  if(kind==='meal')return primary ? path.join(primary,safe) : null;
   const secondary = kind === 'body' ? skinDir : bodyDir;
   for (const dir of [primary, secondary]) {
     if (!dir) continue;

@@ -122,19 +122,21 @@
 
   /* ---------- 睡眠取数：按「醒来日期」归日（与 rhythm 模块一致） ---------- */
   function sleepForDate(sleeps, dateKey, nowMs) {
-    const list = (sleeps || []).filter((s) => s.end && s.kind !== 'nap' && String(s.endLocal || '').slice(0, 10) === dateKey);
+    const list = (sleeps || []).filter((s) => (s.end||s.durationOnly) && s.kind !== 'nap' && String(s.endLocal || '').slice(0, 10) === dateKey);
     const valid = list.filter((s) => {
+      if(s.durationOnly)return Number.isInteger(s.recordedMinutes)&&s.recordedMinutes>0&&s.recordedMinutes<=1440&&Date.parse(s.endLocal+'T00:00')<=(nowMs||Infinity);
       const st = Date.parse(s.start), en = Date.parse(s.end);
       return Number.isFinite(st) && Number.isFinite(en) && en > st && en <= (nowMs || Infinity);
     });
     if (!valid.length) return null;
     /* 时长口径与 RhythmEngine.sleepMinutes 一致：跨度 − 夜间清醒 → 手环时长 → 纯跨度 */
     const minutes = Math.round(valid.reduce((n, s) => {
+      if(s.durationOnly)return n+s.recordedMinutes;
       const span = (Date.parse(s.end) - Date.parse(s.start)) / 60000;
       if (Number.isInteger(s.awakeMinutes) && s.awakeMinutes >= 0 && s.awakeMinutes < span) return n + span - s.awakeMinutes;
       return n + (Number.isInteger(s.recordedMinutes) && s.recordedMinutes > 0 && s.recordedMinutes <= span ? s.recordedMinutes : span);
     }, 0));
-    const starts = valid.map((s) => String(s.startLocal || '')).sort();
+    const starts = valid.filter(s=>!s.durationOnly).map((s) => String(s.startLocal || '')).sort();
     return { minutes, bedtime: starts[0] ? starts[0].slice(11, 16) : null, sessions: valid.length };
   }
 
@@ -249,7 +251,7 @@
     }
     /* R3 连续两晚不足 → 累积效应，提示更强（门槛同 R1 个人化） */
     if (sleep && sleep.minutes < th.shortSleepMin) {
-      const prev = sleepForDate(sleeps, addDays(dateKey, -2), nowMs);
+      const prev = sleepForDate(sleeps, addDays(dateKey, -1), nowMs); /* 上一晚按醒来日归到昨天，不是前天 */
       if (prev && prev.minutes < th.shortSleepMin) {
         out.push({
           dir: 'down', level: 'warn',

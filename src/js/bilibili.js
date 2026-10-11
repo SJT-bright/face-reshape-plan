@@ -33,16 +33,23 @@ const Bilibili = {
     return null;
   },
 
-  /* 本地文件 → file:// 播放地址 */
+  /* 本地文件 → file:// 播放地址；路径逐段 URL 编码，文件名里的 # ? 空格不会截断地址 */
   localUrl(path) {
     let p = String(path || '').replace(/\\/g, '/');
-    if (!p.startsWith('file://')) p = 'file:///' + p.replace(/^\/+/, '');
-    return p;
+    if (p.startsWith('file://')) return p;
+    if (p.startsWith('//')) {
+      const [host, ...parts] = p.slice(2).split('/');
+      return 'file://' + host + '/' + parts.map(encodeURIComponent).join('/');
+    }
+    const drive = p.match(/^([a-zA-Z]:)\//);
+    if (drive) return 'file:///' + drive[1] + '/' + p.slice(3).split('/').map(encodeURIComponent).join('/');
+    return 'file:///' + p.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/');
   },
 
   /* 生成播放节点（iframe 或 video）；startSec>0 恢复到该秒；autoplay=true 自动播放 */
   playerNode(video, startSec, autoplay) {
     if (!video) return null;
+    if (video.source === 'douyin') return null; // 下载成功转为 local 后才能播放。
     if (video.source === 'local') {
       const vd = document.createElement('video');
       vd.src = this.localUrl(video.localPath);
@@ -73,7 +80,7 @@ const MediaSync = {
   pauseAll() {
     let n = 0;
     try {
-      for (const v of document.querySelectorAll('video')) {
+      for (const v of document.querySelectorAll('video:not([data-camera-preview])')) {
         if (!v.paused && !v.ended) { try { v.pause(); n++; } catch (e) {} }
       }
     } catch (e) {}
@@ -85,7 +92,7 @@ const MediaSync = {
   playAll() {
     let n = 0;
     try {
-      for (const v of document.querySelectorAll('video')) {
+      for (const v of document.querySelectorAll('video:not([data-camera-preview])')) {
         if (v.paused && !v.ended && v.readyState > 0) {
           try { const p = v.play(); if (p && p.catch) p.catch(() => {}); n++; } catch (e) {}
         }
@@ -102,7 +109,7 @@ const MediaSync = {
       const stage = document.getElementById('stage');
       if (!stage || !stage.querySelector) return null;
       const local = stage.querySelector('video');
-      if (local) {this.lastState={currentTime:local.currentTime,paused:local.paused,readyState:local.readyState,seeking:local.seeking}; return !local.paused && !local.ended && !local.seeking && local.readyState >= 3;}
+      if (local) {this.lastState={currentTime:local.currentTime,paused:local.paused,ended:local.ended,readyState:local.readyState,seeking:local.seeking}; return !local.paused && !local.ended && !local.seeking && local.readyState >= 3;}
       if (stage.querySelector('iframe')) {
         const native = (typeof window !== 'undefined') ? window.native : null;
         const st = native && native.embeddedMediaStatus ? await native.embeddedMediaStatus() : null;

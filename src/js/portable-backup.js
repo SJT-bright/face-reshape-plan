@@ -4,7 +4,7 @@ const fs = require('node:fs'), path = require('node:path'), crypto = require('no
 const PhotoLib = require('./photo-library');
 const hash = b => crypto.createHash('sha256').update(b).digest('hex');
 const MAX_BYTES = 512 * 1024 * 1024;
-const MEDIA_NAMES = ['skin-photos', 'body-photos', 'imported-videos'];
+const MEDIA_NAMES = ['skin-photos', 'body-photos', 'meal-photos', 'imported-videos'];
 function cleanData(input) {
   const db = JSON.parse(JSON.stringify(input));
   for (const key of Object.keys(db.settings || {})) if (/apikey|secret|token|encrypted/i.test(key)) delete db.settings[key];
@@ -15,6 +15,7 @@ function mediaDirs(dir, opts={}) {
   return {
     'skin-photos': opts.skinDir || opts.photoDir || path.join(dir, 'skin-photos'),
     'body-photos': opts.bodyDir || path.join(dir, 'body-photos'),
+    'meal-photos': opts.mealDir || path.join(dir, 'meal-photos'),
     'imported-videos': opts.videoDir || path.join(dir, 'imported-videos')
   };
 }
@@ -28,11 +29,11 @@ function createBundle(db, dir, includeVideos=false, opts={}) {
     if(total>MAX_BYTES)throw Error('照片和视频合计超过 512 MB，请改用仅保存视频引用');
     const bytes=fs.readFileSync(file);files.push({path:name,bytes:size,sha256:hash(bytes),data:bytes.toString('base64')});
   }
-  for(const p of data.skin?.photos || []) {
+  for(const p of [...(data.skin?.photos || []),...(data.rhythm?.mealPhotos || [])]) {
     if(!PhotoLib.safePhotoName(p.file || '')) throw Error('照片文件名无效');
     const archive = PhotoLib.archiveForPhoto(p.kind)+'/'+p.file;
     if(files.some(f=>f.path===archive)) continue;
-    const found = PhotoLib.locatePhotoFile(p.file, p.kind, dirs['skin-photos'], dirs['body-photos']);
+    const found = PhotoLib.locatePhotoFile(p.file, p.kind, dirs['skin-photos'], dirs['body-photos'],dirs['meal-photos']);
     add(found, archive);
   }
   for(const v of data.videos || [])if(v.source==='local') {
@@ -57,11 +58,11 @@ function validateBundle(bundle) {
 }
 function encode(bundle) { validateBundle(bundle);return zlib.gzipSync(Buffer.from(JSON.stringify(bundle))); }
 function decode(bytes) {return validateBundle(JSON.parse(zlib.gunzipSync(bytes,{maxOutputLength:MAX_BYTES*1.5}).toString()));}
-function summary(b) {return {version:b.version,date:b.createdAt,photos:b.files.filter(f=>f.path.startsWith('skin-photos/')||f.path.startsWith('body-photos/')).length,videos:b.data.videos.length,trainingDays:Object.keys(b.data.logs.training || {}).length,sleeps:b.data.rhythm?.sleeps?.length || 0,meals:b.data.rhythm?.meals?.length || 0,missing:b.missing || [],includeVideos:b.includeVideos};}
+function summary(b) {return {version:b.version,date:b.createdAt,photos:b.files.filter(f=>['skin-photos/','body-photos/','meal-photos/'].some(p=>f.path.startsWith(p))).length,videos:b.data.videos.length,trainingDays:Object.keys(b.data.logs.training || {}).length,sleeps:b.data.rhythm?.sleeps?.length || 0,meals:b.data.rhythm?.meals?.length || 0,missing:b.missing || [],includeVideos:b.includeVideos};}
 function destFor(dir, name, dests) {
   if (name === 'face-reshape-data.json') return path.join(dir, name);
   if (dests && dests[name]) {
-    const kind = name === 'body-photos' ? 'body' : name === 'imported-videos' ? 'video' : 'skin';
+    const kind = name === 'body-photos' ? 'body' : name === 'meal-photos' ? 'meal' : name === 'imported-videos' ? 'video' : 'skin';
     return PhotoLib.assertMediaDest(dir, dests[name], kind);
   }
   return path.join(dir, name);
@@ -90,12 +91,17 @@ function restore(bundle,dir,opts={}) {
     for(const f of bundle.files){const dest=path.join(stage,f.path);fs.mkdirSync(path.dirname(dest),{recursive:true});fs.writeFileSync(dest,Buffer.from(f.data,'base64'),{mode:0o600});}
     for(const v of data.videos)if(v.backupVideo){v.localPath=path.join(dests['imported-videos'], path.basename(v.backupVideo));delete v.backupVideo;}
     fs.writeFileSync(path.join(stage,'face-reshape-data.json'),JSON.stringify(data,null,2),{mode:0o600});
-    fs.mkdirSync(old);const j={before,names,installed:[],mediaDests:dests,photoDest:dests['skin-photos']};fs.writeFileSync(journal,JSON.stringify(j));
+    /* 只替换这次包里真有的媒体目录。未打包的视频或照片留在原地，不能先挪进快照再无处写回。 */
+    const replaceable=new Set(['face-reshape-data.json']);
+    for(const name of MEDIA_NAMES) if(fs.existsSync(path.join(stage,name))) replaceable.add(name);
+    fs.mkdirSync(old);const j={before,names:[...replaceable],installed:[],mediaDests:dests,photoDest:dests['skin-photos']};fs.writeFileSync(journal,JSON.stringify(j));
     for(const name of names){
-      const dest=destFor(dir,name,dests);
-      fs.mkdirSync(path.dirname(dest),{recursive:true});
-      if(fs.existsSync(dest))fs.renameSync(dest,path.join(old,name));
-      if(fs.existsSync(path.join(stage,name))){j.installed.push(name);fs.writeFileSync(journal,JSON.stringify(j));fs.renameSync(path.join(stage,name),dest);}
+      if(replaceable.has(name)){
+        const dest=destFor(dir,name,dests);
+        fs.mkdirSync(path.dirname(dest),{recursive:true});
+        if(fs.existsSync(dest))fs.renameSync(dest,path.join(old,name));
+        if(fs.existsSync(path.join(stage,name))){j.installed.push(name);fs.writeFileSync(journal,JSON.stringify(j));fs.renameSync(path.join(stage,name),dest);}
+      }
       if(opts.failAfter===name)throw Error('Injected restore interruption');}
     fs.rmSync(journal);return {data,before};
   }catch(e){recover(dir);throw e;}finally{fs.rmSync(stage,{recursive:true,force:true});}

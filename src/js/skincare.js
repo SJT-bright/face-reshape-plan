@@ -220,23 +220,26 @@ const Skincare = {
   _timesRow() {
     const t = Store.settings().skincareTimes || { morning: '09:00', noon: '12:00', evening: '20:00' };
     return `
-      <div class="row" id="sk-times" style="align-items:flex-end">
+      <div class="daily-time-settings"><h4>护肤与认知时间</h4><div class="row" id="sk-times" style="align-items:flex-end">
         <div><label class="field">☀️ 晨间开始</label><input class="input sk-time" data-k="morning" type="time" value="${t.morning}" style="width:118px"></div>
         <div><label class="field">🌤️ 日间开始</label><input class="input sk-time" data-k="noon" type="time" value="${t.noon}" style="width:118px"></div>
         <div><label class="field">🌙 晚间开始</label><input class="input sk-time" data-k="evening" type="time" value="${t.evening}" style="width:118px"></div>
-        <button class="btn small" id="sk-times-save">保存时段</button>
-        <span class="hint">到点会提醒你做对应时段的护肤（该时段有步骤且未完成时）</span>
-      </div>`;
+      </div>${typeof UX!=='undefined'?UX.watchingSettingsFields():''}<p class="hint">护肤与认知到点切换各自的时段。观看时长单独累计，早晚开始时间留空则不提醒。</p><button class="btn small" id="sk-times-save">保存时间与时长</button></div>`;
   },
 
   bindTimesRow(root) {
     const box = $('#sk-times', root);
     if (!box) return;
-    $('#sk-times-save', box).onclick = () => {
+    $('#sk-times-save', root).onclick = () => {
+      try {
+      const plans=UX.watchingSettingsValues(box.closest('.daily-time-settings'));
       const t = Store.settings().skincareTimes = Store.settings().skincareTimes || {};
-      $$('.sk-time', box).forEach(inp => { t[inp.dataset.k] = inp.value || '00:00'; });
+      $$('.sk-time', box).forEach(inp => { t[inp.dataset.k] = inp.value; });
+      UX.saveWatchingSettings(plans);
       Store.save(true);
-      toast('护肤时段已保存 ✓', 'green');
+      UX.careManualPhase=null;UX.updateCareNow(true);
+      toast('护肤与认知安排已保存 ✓', 'green');
+      } catch(error){toast(error.message,'red');}
     };
   },
 
@@ -337,7 +340,7 @@ const Skincare = {
     const set = Store.settings();
     const stT = set.skincareTimes || { morning: '09:00', noon: '12:00', evening: '20:00' };
     const curMin = minutesOf(hhmm());
-    const phase = curMin >= (minutesOf(stT.evening) ?? 1200) ? 'evening'
+    const phase = typeof Routine !== 'undefined' && Routine.active?.period ? Routine.active.period : curMin >= (minutesOf(stT.evening) ?? 1200) ? 'evening'
       : curMin >= (minutesOf(stT.noon) ?? 720) ? 'day' : 'morning';
     const phaseTip = phase === 'morning' ? '早上：温和清洁 + 保湿 + 防晒（SPF 30+，阴天也有紫外线）'
       : phase === 'day' ? '日间：需要时补涂防晒；少用手摸脸' : '晚上：清洁 + 功效成分（如视黄醇类夜间用，从低频开始）+ 保湿修护';
@@ -550,6 +553,7 @@ const Skincare = {
       <div class="card">
         <h3>🔬 今日皮肤状态
           <span class="h-extra">${log && score ? `已记录 · 评分 ${score.score}/100（含引擎推导）` : '还没记录'}</span>
+          <button class="btn primary small" id="sk-skin-shoot" type="button" data-no-icon="true">📸 拍摄今日皮肤</button>
         </h3>
         <p class="hint" style="margin:0 0 10px">每天 <b>30 秒</b>：记痘痘数量、肤感和大概感受就够——眼周/毛孔/泛红/屏障等由引擎根据<b>昨晚睡眠与你的历史</b>自动推导（显式记录优先于推导）。评分为<b>自评加权参考，非医学诊断</b>：<details style="display:inline"><summary style="cursor:pointer; display:inline; color:#7b74e2">查看权重口径</summary>
           <span>痘痘 ${Math.round(SkinEngine.ACNE_WEIGHT * 100)}% · ${SkinEngine.PARAMS.map((p) => `${p.label} ${Math.round(p.weight * 100)}%`).join(' · ')}（主客观 7:3 融合）。痘痘按病灶计数计分，与痤疮临床试验的病灶计数终点口径一致；各维度权重为设计取值（文献不提供合成权重），非临床分级</span></details></p>
@@ -623,33 +627,36 @@ const Skincare = {
     const weight = Store.db.strength && Store.db.strength.bmiProfile ? Store.db.strength.bmiProfile.weightKg : '';
     return `
       <div class="card">
-        <h3>📸 照片档案 <span class="h-extra">同一角度光线，变化才可比</span></h3>
+        <h3 class="sk-photo-heading">📸 照片档案 <span class="h-extra">同一角度光线，变化才可比</span><button class="btn primary small" id="sk-photo-shoot" type="button" data-no-icon="true">📸 拍摄</button></h3>
         <details style="margin:4px 0 8px"><summary style="cursor:pointer; font-size:12px; color:#7b74e2">📷 拍摄一致性小贴士（点开）</summary>
           <span style="display:block; font-size:12px; color:#64758a; margin-top:4px">同一时间（建议晨起洗脸后）· 正面平视同一角度 · 自然光、素颜、摘掉眼镜与刘海——照片越一致，AI 对比与评分趋势越可信。</span></details>
         <div class="row" style="align-items:center; flex-wrap:wrap; gap:8px">
           <button class="btn small ${kind === 'skin' ? 'primary' : ''}" data-skin-kind="skin">🧑 皮肤状态</button>
           <button class="btn small ${kind === 'body' ? 'primary' : ''}" data-skin-kind="body">💪 健身体型</button>
           <span style="flex:1"></span>
-          <label class="row" style="gap:6px; font-size:12.5px; color:#566176">体重kg
+          <label class="row" style="gap:6px; font-size:12.5px; color:#566176" ${kind==='skin'?'hidden':''}>体重kg
             <input class="input sk-num" id="sk-photo-weight" type="number" min="25" max="400" step="0.1" style="width:80px" value="${esc(String(weight || ''))}" placeholder="选填"></label>
-          <label class="row" style="gap:6px; font-size:12.5px; color:#566176">拍摄日期
+          <label class="row" style="gap:6px; font-size:12.5px; color:#566176">导入日期
             <input class="input" id="sk-photo-date" type="date" max="${today}" value="${today}" style="width:140px"></label>
-          <label>角度<select class="input" id="sk-photo-angle"><option value="unknown">未标注</option><option value="front">正面</option><option value="left">左侧</option><option value="right">右侧</option></select></label><button class="btn" id="sk-photo-add">＋ 添加照片</button>
+          <label>角度<select class="input" id="sk-photo-angle"><option value="unknown">未标注</option><option value="front">正面</option><option value="left">左侧</option><option value="right">右侧</option></select></label><button class="btn" id="sk-photo-add">导入已有照片</button>
+          <input type="file" id="sk-photo-file" accept="image/*" multiple style="display:none">
+        </div>
+        <details class="sk-photo-tools"><summary>导入、管理与对比工具</summary><div class="ux-actions">
           <button class="btn" id="sk-photo-folder">打开${kind === 'body' ? '健身照片' : '皮肤照片'}文件夹</button>
           <button class="btn ghost" id="sk-photo-scan" data-no-icon="true">读取文件夹里的新照片</button>
           <button class="btn ghost" id="sk-photo-paste" data-no-icon="true">📋 粘贴截图</button>
           <button class="btn ghost" id="sk-photo-overview" data-no-icon="true">▦ 总览对比</button>
-          <input type="file" id="sk-photo-file" accept="image/*" multiple style="display:none">
         </div>
         <p class="hint" style="margin:8px 0 10px" id="sk-photo-folder-path">${kind === 'body' ? '健身照保存在工程「健身照片」文件夹。' : '皮肤照保存在工程「皮肤照片」文件夹。'}把 jpg/png 直接放进去，再点「读取文件夹里的新照片」或重新打开本页即可。本地视频在「跟练视频」。${kind === 'skin' ? '建议每天同一位置、自然光下拍一面。' : '体型照配体重，和力量训练的进步对照看。'}</p>
+        </details>
         <div class="sk-drop" id="sk-photo-drop">
           ${photos.length ? `<div class="sk-photo-grid">
             ${photos.map((p, i) => `
               <figure class="sk-photo-thumb" data-idx="${i}" title="${esc(p.date)}${p.weightKg ? ' · ' + p.weightKg + 'kg' : ''}">
                 <img data-photo-file="${esc(p.file)}" data-photo-kind="${esc(p.kind || kind)}" alt="${esc(p.date)}">
-                <figcaption>${esc(p.date.slice(5))}${p.weightKg ? ' · ' + p.weightKg + 'kg' : ''}</figcaption>
+                <figcaption>${esc(p.date.slice(5))}${p.local ? ' '+esc(p.local.slice(11)) : ''}${p.weightKg ? ' · ' + p.weightKg + 'kg' : ''}${p.source==='weixin-life-diary' ? ' · 微信' : ''}</figcaption>
               </figure>`).join('')}
-          </div>` : '<div class="empty" style="padding:18px 0">还没有照片。打开照片文件夹，把图片放进去，或点「添加照片」。</div>'}
+          </div>` : '<div class="empty" style="padding:18px 0">还没有照片。点右上方「拍摄」打开摄像头，或导入已有照片。</div>'}
         </div>
       </div>`;
   },
@@ -726,12 +733,12 @@ const Skincare = {
       </div>`;
   },
 
-  /* 健康简报：三系统数据汇总成纯文本，一键复制给任意 AI 问诊 */
+  /* 健康简报：三系统数据汇总成纯文本，便于复制整理 */
   _buildHealthBrief() {
     const db = Store.db;
     const t = todayKey();
     const L = [];
-    L.push(`【皮肤与生活简报】生成于 ${t}（本应用「面部重塑计划」导出，供 AI 参考，非医学诊断）`);
+    L.push(`【皮肤与生活简报】生成于 ${t}（本应用「人生重塑计划」导出，供 AI 参考，非医学诊断）`);
     L.push('');
     L.push('== 皮肤（近14天，评分0-100越高越好）==');
     const dates = Object.keys(db.skin.logs).sort().slice(-14);
@@ -793,13 +800,14 @@ const Skincare = {
     const text = this._buildHealthBrief();
     try {
       await navigator.clipboard.writeText(text);
-      toast('健康简报已复制，粘贴给任意 AI 即可问诊', 'green');
+      toast('健康简报已复制，可粘贴给 AI 辅助整理健康问题', 'green');
     } catch {
       toast('复制失败，请手动选择文本复制', 'red');
     }
   },
 
   _bindSkin(root) {
+    const shoot=$('#sk-skin-shoot',root);if(shoot)shoot.onclick=()=>CareCamera.shoot({kind:'skin',date:todayKey(),returnTab:'record'});
     /* 分段选择：单选切换 */
     $$('.sk-seg', root).forEach((seg) => {
       $$('button', seg).forEach((btn) => {
@@ -895,6 +903,7 @@ const Skincare = {
   },
 
   _bindPhotoCard(root) {
+    const shoot=$('#sk-photo-shoot',root);if(shoot)shoot.onclick=()=>CareCamera.shoot({kind:this.ui.skinPhotoKind||'skin',date:todayKey(),angle:$('#sk-photo-angle',root)?.value,returnTab:'photos'});
     /* 照片类别切换 */
     $$('[data-skin-kind]', root).forEach((btn) => {
       btn.onclick = () => { this.ui.skinPhotoKind = btn.dataset.skinKind; App.render(); };
@@ -1099,11 +1108,12 @@ const Skincare = {
 
   _photoViewer(idx) {
     const kind = this.ui.skinPhotoKind || 'skin';
-    const list = this._photoList(kind).slice(0, 30);
+    const list = this._photoList(kind);
     const p = list[idx];
     if (!p) return;
     const card = openModal(`
       <h3>🖼️ ${p.date}${p.kind === 'body' ? ' · 体型' : ' · 皮肤'}${p.weightKg ? ` · ${p.weightKg}kg` : ''}</h3>
+      ${p.local ? `<p class="hint">${p.timeKind==='occurred'?'记录时间':'照片发送时间'}：${esc(p.local.replace('T',' '))} · 北京时间${p.note ? ' · '+esc(p.note) : ''}</p>` : ''}
       <div class="sk-viewer-img"><img data-photo-file="${esc(p.file)}" data-photo-kind="${esc(p.kind || kind)}" alt="${esc(p.date)}"></div>
       <div class="row" style="margin-top:10px; justify-content:space-between">
         <button class="btn" id="pv-prev" data-no-icon="true" ${idx <= 0 ? 'disabled' : ''}>‹ 上一张</button>
@@ -1121,6 +1131,10 @@ const Skincare = {
       if (!await confirmModal('删除照片', '仅删除这张照片记录，皮肤日志不受影响。', '删除')) return;
       await native.deleteSkinPhoto(p.file, p.kind || kind);
       Store.db.skin.photos = Store.db.skin.photos.filter((x) => x.id !== p.id);
+      if(p.sourceKey){
+        Store.db.photoImportVersions=Store.db.photoImportVersions || {};
+        Store.db.photoImportVersions[p.sourceKey]={revision:p.sourceRevision || 1,state:'manual-deleted'};
+      }
       /* 删的是今天的照片时清掉自动识图标记：否则当天补拍新照会被「已跑过」挡住不再分析（走查 #4） */
       if (Store.db.skin.aiAutoRun && Store.db.skin.aiAutoRun.date === todayKey()) delete Store.db.skin.aiAutoRun;
       Store.save(true);
@@ -1249,7 +1263,7 @@ const Skincare = {
       <div class="card sk-mix-card">
         <h3>🧪 成分混搭检查 <span class="h-extra">${esc(checked)} 个产品 · ${esc(summary)}</span></h3>
         ${result.findings.length ? `<div class="sk-mix-list">${items}</div>`
-          : '<p class="hint" style="margin:6px 0 0">当前流程里的产品可以搭配使用。<span class="h-extra">风险等级：避免 &gt; 谨慎 &gt; 提示</span></p>'}
+          : '<p class="hint" style="margin:6px 0 0">按已识别的产品名称和内置规则，暂未发现需要提示的搭配冲突。<span class="h-extra">风险等级：避免 &gt; 谨慎 &gt; 提示</span></p>'}
         <p class="hint" style="margin-top:8px">基于内置成分知识库与产品名称识别，仅供参考、不构成医疗建议；处方药请遵医嘱。规则溯源见 docs/ingredient-mix-design.md。</p>
       </div>`;
   },
@@ -1298,14 +1312,16 @@ const Skincare = {
       };
     });
     $$('.sk-add', el).forEach(btn => {
-      btn.onclick = (e) => { e.stopPropagation(); this.quickAddModal(btn.dataset.phase, () => this.view($('#view-root'))); };
+      btn.onclick = (e) => { e.stopPropagation(); this.quickAddModal(btn.dataset.phase, () => (typeof App !== 'undefined' && typeof App.render === 'function' ? App.render() : this.view($('#view-root')))); };
     });
     $('.edit', el).onclick = () => this.editCycleModal(c);
     $('.del', el).onclick = async () => {
       const ok = await confirmModal('删除周期', `确定删除「${c.name}」吗？相关打卡记录保留。`, '删除');
       if (!ok) return;
       Store.db.skincare.cycles = Store.db.skincare.cycles.filter(x => x.id !== c.id);
-      Store.save(true); this.view($('#view-root'));
+      Store.save(true);
+      if (typeof App !== 'undefined' && typeof App.render === 'function') App.render();
+      else this.view($('#view-root'));
     };
     return el;
   },
@@ -1519,19 +1535,36 @@ const Skincare = {
       </div>`);
     $('#ec-cancel', card).onclick = closeModal;
     $('#ec-save', card).onclick = () => {
-      const mk = txt => String(txt || '').split('\n').map(s => s.trim()).filter(Boolean).map(line => {
-        const m = line.match(/^(.{1,30}?)\s*[：:]\s*(.+)$/);
-        return { id: uid('st'), name: m ? m[1].trim() : line.trim(), detail: m ? m[2].trim() : '' };
-      });
+      /* 打卡记在旧步骤 id 上：同时段「名称：用法」没变就复用，已用过的 id 不再发给另一行 */
+      const mk = (txt, phase) => {
+        const oldSteps = c.id && c.steps && Array.isArray(c.steps[phase]) ? c.steps[phase] : [];
+        const usedIds = new Set();
+        return String(txt || '').split('\n').map(s => s.trim()).filter(Boolean).map(line => {
+          const m = line.match(/^(.{1,30}?)\s*[：:]\s*(.+)$/);
+          const name = m ? m[1].trim() : line.trim();
+          const detail = m ? m[2].trim() : '';
+          const key = detail ? `${name}：${detail}` : name;
+          let id = '';
+          if (c.id) {
+            const hit = oldSteps.find(s => {
+              if (!s || !s.id || usedIds.has(s.id)) return false;
+              const oldKey = s.detail ? `${s.name}：${s.detail}` : s.name;
+              return oldKey === key;
+            });
+            if (hit) { usedIds.add(hit.id); id = hit.id; }
+          }
+          return { id: id || uid('st'), name, detail };
+        });
+      };
       const obj = {
         id: c.id || uid('cyc'),
         name: $('#ec-name', card).value.trim() || '未命名周期',
         startDate: $('#ec-start', card).value,
         endDate: $('#ec-end', card).value,
         steps: {
-          morning: mk($('#ec-morning', card).value),
-          day: mk($('#ec-day', card).value),
-          evening: mk($('#ec-evening', card).value)
+          morning: mk($('#ec-morning', card).value, 'morning'),
+          day: mk($('#ec-day', card).value, 'day'),
+          evening: mk($('#ec-evening', card).value, 'evening')
         }
       };
       if (c.id) {
@@ -1540,7 +1573,9 @@ const Skincare = {
       } else {
         Store.db.skincare.cycles.push(obj);
       }
-      Store.save(true); closeModal(); this.view($('#view-root'));
+      Store.save(true); closeModal();
+      if (typeof App !== 'undefined' && typeof App.render === 'function') App.render();
+      else this.view($('#view-root'));
       toast('已保存 ✓', 'green');
     };
   }

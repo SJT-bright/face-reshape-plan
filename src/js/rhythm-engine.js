@@ -103,7 +103,12 @@
   }
   /* 累计睡眠口径：入睡→起床跨度 − 夜间清醒总时间（手环「清醒」时长）。
      未填清醒时间时回退：导入记录自带的手环时长 → 纯时间差。 */
+  function hasSleep(s) {
+    if(!s)return false;
+    return s.durationOnly?Number.isInteger(s.recordedMinutes)&&s.recordedMinutes>0&&s.recordedMinutes<=1440&&/^\d{4}-\d{2}-\d{2}$/.test(s.endLocal||''):!!s.end;
+  }
   function sleepMinutes(s) {
+    if(s.durationOnly)return hasSleep(s)?s.recordedMinutes:null;
     const elapsed = (Date.parse(s.end) - Date.parse(s.start)) / MS;
     if (Number.isInteger(s.awakeMinutes) && s.awakeMinutes >= 0 && s.awakeMinutes < elapsed) return elapsed - s.awakeMinutes;
     return Number.isInteger(s.recordedMinutes) && s.recordedMinutes > 0 && s.recordedMinutes <= elapsed ? s.recordedMinutes : elapsed;
@@ -128,13 +133,13 @@
     const meals = data.meals.filter(m => m && parse(m.local) && nearDay(day(m.local)) && Number.isFinite(Date.parse(m.at)) && Date.parse(m.at) <= +now).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
     const validSleeps = data.sleeps.filter(s => s && parse(s.startLocal) && parse(s.endLocal) && nearDay(day(s.endLocal)) && Date.parse(s.end) <= +now && Date.parse(s.end) > Date.parse(s.start) && Date.parse(s.end) - Date.parse(s.start) <= 1440 * MS);
     const conflicts = new Set(validSleeps.filter(s => meals.some(m => Date.parse(m.at) > Date.parse(s.start) && Date.parse(m.at) < Date.parse(s.end)) || validSleeps.some(t => t.id !== s.id && Date.parse(s.start) < Date.parse(t.end) && Date.parse(s.end) > Date.parse(t.start))).map(s => s.id));
-    const sleeps = validSleeps.filter(s => !conflicts.has(s.id));
+    const sleeps = [...validSleeps.filter(s => !conflicts.has(s.id)),...data.sleeps.filter(s=>s.durationOnly&&hasSleep(s)&&nearDay(day(s.endLocal))&&day(s.endLocal)<=today)];
     const rows = dates.map(date => {
       const dm = meals.filter(m => day(m.local) === date);
       const ds = sleeps.filter(s => day(s.endLocal) === date);
       const mc = data.completeDays[date]?.meals === true, sc = data.completeDays[date]?.sleep === true;
       const hasConflict = validSleeps.some(s => conflicts.has(s.id) && day(s.endLocal) === date);
-      const main = ds.filter(s => s.kind !== 'nap').sort((a, b) => (Date.parse(b.end) - Date.parse(b.start)) - (Date.parse(a.end) - Date.parse(a.start)))[0];
+      const main = ds.filter(s => !s.durationOnly && s.kind !== 'nap').sort((a, b) => (Date.parse(b.end) - Date.parse(b.start)) - (Date.parse(a.end) - Date.parse(a.start)))[0];
       return { date, meals: dm, sleeps: ds, mealComplete: mc, sleepComplete: sc,
         sleepMinutes: sc && ds.length && !hasConflict ? ds.reduce((n, s) => n + sleepMinutes(s), 0) : null,
         first: mc && dm.length ? dm[0] : null, last: mc && dm.length ? dm[dm.length - 1] : null,
@@ -362,8 +367,8 @@
   /* ---------- 今日饮食参考（目标口径，非实际摄入统计） ----------
      原理与出处见 docs/nutrition-advice-design.md。要点：
      - BMR 用 Mifflin-St Jeor、活动系数 TDEE（与 strength-core 同式，保持模块独立可测）；
-     - 蛋白质：有力量训练记录 → 1.6 g/kg、周刺激组 >20 → 1.8 g/kg（ISSN 运动人群带 1.4–2.0，Jäger 2017）；
-       无训练记录 → 1.2 g/kg（保守取值：高于中国 DRIs 2023 成人 RNI ≈0.98、低于 ISSN 带下限 1.4；65 岁以上 DRIs 为 1.17）；
+     - 蛋白质：周刺激组 ≥10 → 1.6 g/kg、>20 → 1.8 g/kg（ISSN 运动人群带 1.4–2.0，Jäger 2017）；
+       1–9 组与无训练记录 → 1.2 g/kg（无记录档为保守取值：高于中国 DRIs 2023 成人 RNI ≈0.98、低于 ISSN 带下限 1.4；65 岁以上 DRIs 为 1.17）；
        每餐参考 ISSN 单次剂量带 0.25–0.4 g/kg（≈20–40g 起，全食餐取上端 0.4）；
      - 脂肪：供能 25% 起步（中国 AMDR 20–30% 中点）；碳水余量越出 50–65%E 时在带内调脂肪让位，不可行则如实披露；
      - 碳水：余量供能 ÷4 且受 50–65%E 约束，同时给出 g/kg 对照 3–5 g/kg 常用带（ACSM）；
@@ -428,7 +433,8 @@
     notes.push(weeklySets == null
       ? '蛋白 1.2 g/kg 为保守取值：高于中国 DRIs 2023 成人 RNI ≈0.98 g/kg（65 岁以上 1.17）、低于 ISSN 运动人群带下限 1.4'
       : weeklySets > 20 ? '蛋白 1.8 g/kg，取 ISSN 运动人群带 1.4–2.0 的上段（周刺激组 >20，恢复压力更大）'
-        : '蛋白 1.6 g/kg，取 ISSN 运动人群带 1.4–2.0 的常用值');
+        : weeklySets >= 10 ? '蛋白 1.6 g/kg，取 ISSN 运动人群带 1.4–2.0 的常用值'
+          : '蛋白 1.2 g/kg，周刺激组 1–9 按轻训练量取值（低于 ISSN 运动人群带下限 1.4）');
     notes.push(`蛋白目标共 ${proteinG}g：按 4 餐分摊约每餐 ${perMealG}g（≈${perMealPerKg} g/kg；ISSN 单次参考带 0.25–0.4 g/kg，全食餐取上端）`);
     if (perMealPerKg > 0.4) notes.push(`单餐折算高于 0.4 g/kg 参考带上端——可按约 ${Math.ceil(proteinPerKg / 0.4)} 餐分摊（单次剂量是优化参考、不是上限）`);
     if (rawCount >= 1) notes.push(`今天已记 ${rawCount} 次进食${rawCount >= 4 ? '，加餐无需每次都配蛋白' : ''}`);
@@ -493,7 +499,9 @@
     }
     if (meals.length >= 1) {
       const last = clock(meals[meals.length - 1].local);
-      const factor = last <= 20 * 60 + 30 ? 100 : last <= 21 * 60 + 30 ? 75 : 50;
+      /* 夜宵可落到次日清晨：00:00–05:59 比较前 +1440，避免被当成上午（≤20:30 → 100） */
+      const lateAt = last < 6 * 60 ? last + 1440 : last;
+      const factor = lateAt <= 20 * 60 + 30 ? 100 : lateAt <= 21 * 60 + 30 ? 75 : 50;
       factors.push({ key: 'late', label: `末次进食 ${clockText(last)}`, weight: 0.25, factor, note: '生物钟使晚间糖耐量下降：20:30 前完餐计优，21:30 后计不利（观察性证据）' });
     }
     if (!factors.length) return null;
@@ -521,6 +529,6 @@
       disclaimer: '血糖友好「习惯」参考分：按你的记录评估习惯，不是血糖测量；血糖波动与注意力/困倦的关联为观察性证据，不预测任何认知表现。'
     };
   }
-  const api = { normalize, localNow, addDay, parse, circularSD, validateMeal, validateSleep, sleepInput, sleepMinutes, analyze, completeBetween, sleepQuality, sleepPoints, daysBetweenKeys, sleepAdvice, circularMeanMinutes, circularMedoidMinutes, circularShift, circularDiffMinutes, circularMidpoint, clockText, nutritionAdvice, summarizeMealsToday, SUGAR_TIERS, setSugarTier, glycemicScore, MEAL_TYPE_WINDOWS, classifyMealType, mealTypeLabel, mealTypeKind, resolveMealSelection };
+  const api = { normalize, localNow, addDay, parse, circularSD, validateMeal, validateSleep, sleepInput, sleepMinutes, hasSleep, analyze, completeBetween, sleepQuality, sleepPoints, daysBetweenKeys, sleepAdvice, circularMeanMinutes, circularMedoidMinutes, circularShift, circularDiffMinutes, circularMidpoint, clockText, nutritionAdvice, summarizeMealsToday, SUGAR_TIERS, setSugarTier, glycemicScore, MEAL_TYPE_WINDOWS, classifyMealType, mealTypeLabel, mealTypeKind, resolveMealSelection };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.RhythmEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

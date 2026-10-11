@@ -2,6 +2,9 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
+const { DatabaseSync } = require('node:sqlite');
+const python = process.platform === 'win32' ? 'python' : 'python3';
+function createSqlite(file, schema) { const db = new DatabaseSync(file); try { db.exec(schema); } finally { db.close(); } }
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
@@ -117,7 +120,7 @@ test('导出脚本：不存在的路径被拒绝且不创建文件（真只读�
   const script = path.join(__dirname, '..', 'scripts', 'export-strength-from-life-pivot.py');
   let exitCode = 0;
   try {
-    execFileSync('python3', [script, missing], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    execFileSync(python, [script, missing], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   } catch (err) {
     exitCode = err.status;
   }
@@ -147,9 +150,9 @@ test('合成 SQLite → 导出脚本 → 导入：端到端', () => {
     insert into manual_exercise_day_actions values ('da_1', 'day_1', 'act-1-1', '上斜卧推', 5, '10', '', 5, '10', '13.3kg', 0);
     insert into manual_exercise_day_resolutions values ('res_1', 'day_1', 'completed', '', '2026-09-06T00:00:00.000Z', null);
   `;
-  execFileSync('sqlite3', [db], { input: schema });
+  createSqlite(db, schema);
   const script = path.join(__dirname, '..', 'scripts', 'export-strength-from-life-pivot.py');
-  const out = execFileSync('python3', [script, db], { encoding: 'utf8' });
+  const out = execFileSync(python, [script, db], { encoding: 'utf8', env: { ...process.env, PYTHONUTF8: '1' } });
   const payload = JSON.parse(out); // 导出必须是单个合法 JSON
   assert.ok(payload.templates.length === 1);
   assert.ok(payload.days['2026-09-06']);
@@ -162,8 +165,8 @@ test('合成 SQLite → 导出脚本 → 导入：端到端', () => {
   // 注入样本走同一管道必须被拒
   const badDb = path.join(tmp, 'injection.sqlite');
   const badSchema = schema.replace("'2026-09-06', 'ver_1'", "'\"><img src=x onerror=alert(1)>', 'ver_1'");
-  execFileSync('sqlite3', [badDb], { input: badSchema });
-  const badOut = execFileSync('python3', [script, badDb], { encoding: 'utf8' });
+  createSqlite(badDb, badSchema);
+  const badOut = execFileSync(python, [script, badDb], { encoding: 'utf8', env: { ...process.env, PYTHONUTF8: '1' } });
   const badPayload = JSON.parse(badOut);
   const state2 = Core.normalize({});
   const r2 = Core.importFrom(state2, badPayload);

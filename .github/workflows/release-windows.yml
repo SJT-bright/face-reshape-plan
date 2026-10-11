@@ -1,0 +1,80 @@
+name: Windows build and release
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the verified build as a GitHub Release
+        type: boolean
+        default: false
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: node tests/test-windows-default-data.cjs
+      - run: npm run test:video-collections
+      - run: npm run test:soft-ui
+      - run: npm run test:capture-ui
+      - run: npm run dist:win
+      - name: Launch the packaged Windows executable
+        run: npm run test:release -- "dist/win-unpacked/人生重塑计划.exe"
+      - name: Test the installer and create the portable ZIP
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $setup = Get-Item "dist/Life-Reshape-Plan-$version-Windows-x64-Setup.exe"
+          $installDir = Join-Path $env:RUNNER_TEMP 'life-reshape-installed'
+          $process = Start-Process -FilePath $setup.FullName -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
+          npm run test:release -- "$installDir/人生重塑计划.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'Installed executable test failed' }
+          Compress-Archive -Path dist/win-unpacked/* -DestinationPath "dist/Life-Reshape-Plan-$version-Windows-x64.zip"
+          $lines = Get-ChildItem dist -File | Where-Object { $_.Extension -in '.exe','.zip' } | ForEach-Object {
+            $sum = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$sum  $($_.Name)"
+          }
+          $lines | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+          Copy-Item release-evidence/win32-launch.json dist/windows-validation.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-validation
+          path: release-evidence/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: |
+            dist/*Setup.exe
+            dist/*Windows-x64.zip
+            dist/SHA256SUMS.txt
+            dist/windows-validation.json
+      - name: Publish verified Windows packages
+        if: github.ref_type == 'tag' || (inputs.publish && github.ref == 'refs/heads/main')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tag = "v$version"
+          if (('${{ github.ref_type }}' -eq 'tag') -and ('${{ github.ref_name }}' -ne $tag)) { throw 'Tag and package version differ' }
+          gh release create $tag --target "${{ github.sha }}" --title "人生重塑计划 $version · Windows / macOS 源码" --notes-file docs/release-notes.md "dist/Life-Reshape-Plan-$version-Windows-x64-Setup.exe" "dist/Life-Reshape-Plan-$version-Windows-x64.zip" dist/SHA256SUMS.txt dist/windows-validation.json
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed' }

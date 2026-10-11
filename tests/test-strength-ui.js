@@ -37,7 +37,8 @@ const seedDays = [
   {
     dayKey: 'legs', name: '腿日（臀腿）', bodyPart: '腿', isRest: false, note: '', ordinal: 2,
     actions: [
-      { actionKey: 'legs-a1', name: '徒手深蹲', plannedSets: 4, plannedRepsText: '15-20', plannedWeightText: '', targetText: '', note: '', ordinal: 0 }
+      { actionKey: 'legs-a1', name: '徒手深蹲', plannedSets: 4, plannedRepsText: '15-20', plannedWeightText: '', targetText: '', note: '', ordinal: 0 },
+      { actionKey: 'legs-a2', name: '臀桥', plannedSets: 3, plannedRepsText: '12', plannedWeightText: '自重', targetText: '', note: '', ordinal: 1 }
     ]
   }
 ];
@@ -394,6 +395,57 @@ app.on('browser-window-created', (_event, win) => {
       assert.match(badWeight.toast, /自重/);
       assert.equal(badWeight.weight, 0);
       await js(`(() => { const rows = [...document.querySelectorAll('#st-actions .st-tr')].filter(tr => tr.querySelector('[data-key="setsDone"]')); rows[0].querySelector('[data-key="weightKg"]').value = '自重'; })()`);
+
+      /* l) 按计划填充：与计划冲突的未保存手输先弹确认，取消全部保留，确认后才按计划覆盖；
+            无冲突（留空、已与计划一致、显式 0 对计划「自重」）直接填不弹窗；全程只改 DOM 不落盘 */
+      const prefillDate = await js("StrengthCore.businessDate()");
+      await js(`(() => {
+        const rows = [...document.querySelectorAll('#st-actions .st-tr')].filter(tr => tr.querySelector('[data-key="setsDone"]'));
+        rows[0].querySelector('[data-key="setsDone"]').value = '2';
+        rows[0].querySelector('[data-key="repsText"]').value = '9';
+        rows[0].querySelector('[data-key="weightKg"]').value = '30';
+      })()`);
+      await js("document.querySelector('#st-prefill').click()");
+      await wait("!!document.querySelector('#m-ok')");
+      const prefillModalText = await js("document.querySelector('#modal-card').innerText");
+      assert.match(prefillModalText, /覆盖已填写的数据/);
+      assert.match(prefillModalText, /与计划不同/);
+      await js("document.querySelector('#m-cancel').click()");
+      await wait("!document.querySelector('#m-ok')");
+      await pause(120);
+      const prefillInputs = "(() => [...document.querySelectorAll('#st-actions .st-tr')].filter(tr => tr.querySelector('[data-key=\"setsDone\"]')).map(tr => ['setsDone','repsText','weightKg'].map(k => tr.querySelector('[data-key=\"' + k + '\"]').value)))()";
+      const afterCancel = await js(prefillInputs);
+      assert.deepEqual(afterCancel[0], ['2', '9', '30'], '取消后手输值必须原样保留');
+      await js("document.querySelector('#st-prefill').click()");
+      await wait("!!document.querySelector('#m-ok')");
+      await js("document.querySelector('#m-ok').click()");
+      await pause(120);
+      assert.deepEqual(await js(prefillInputs), [
+        ['4', '15-20', ''],
+        ['3', '12', '自重']
+      ], '确认后按计划覆盖；计划无负重的动作清空负重框（原填充语义不变）');
+      /* 表格已与计划一致：再次点击不弹确认，直接填充（幂等） */
+      await js("document.querySelector('#st-prefill').click()");
+      await pause(350);
+      assert.equal(await js("!!document.querySelector('#m-ok')"), false);
+      assert.deepEqual(await js(prefillInputs), [
+        ['4', '15-20', ''],
+        ['3', '12', '自重']
+      ]);
+      /* 显式 0 与计划「自重」是同一负重：不算冲突，不弹确认 */
+      await js(`(() => {
+        const rows = [...document.querySelectorAll('#st-actions .st-tr')].filter(tr => tr.querySelector('[data-key="setsDone"]'));
+        rows[1].querySelector('[data-key="weightKg"]').value = '0';
+      })()`);
+      await js("document.querySelector('#st-prefill').click()");
+      await pause(350);
+      assert.equal(await js("!!document.querySelector('#m-ok')"), false);
+      assert.equal(await js(`[...document.querySelectorAll('#st-actions .st-tr')].filter(tr => tr.querySelector('[data-key="setsDone"]'))[1].querySelector('[data-key="weightKg"]').value`), '自重');
+      /* 填充不落盘：今天盘上的记录仍是 (k) 保存的 3/15/0 */
+      const prefillDisk = JSON.parse(fs.readFileSync(file, 'utf8'));
+      assert.equal(prefillDisk.strength.days[prefillDate].actions[0].setsDone, 3);
+      assert.equal(prefillDisk.strength.days[prefillDate].actions[0].repsText, '15');
+      assert.equal(prefillDisk.strength.days[prefillDate].actions[0].weightKg, 0);
 
       const disk = JSON.parse(fs.readFileSync(file, 'utf8'));
       assert.equal(disk.sentinel, 'preserve-strength-seed');

@@ -127,7 +127,7 @@
     const training = (db.logs && db.logs.training) || {};
     const skin = (db.logs && db.logs.skincare) || {};
     const meals = ((db.rhythm && db.rhythm.meals) || []).filter((m) => m && validLocal(m.local));
-    const sleeps = ((db.rhythm && db.rhythm.sleeps) || []).filter((s) => s && validLocal(s.startLocal) && validLocal(s.endLocal) && s.endLocal > s.startLocal);
+    const sleeps = ((db.rhythm && db.rhythm.sleeps) || []).filter((s) => s && (s.durationOnly&&Number.isInteger(s.recordedMinutes)&&s.recordedMinutes>0&&s.recordedMinutes<=1440&&/^\d{4}-\d{2}-\d{2}$/.test(s.endLocal||'')||validLocal(s.startLocal)&&validLocal(s.endLocal)&&s.endLocal>s.startLocal));
     const mains = sleeps.filter((s) => s.kind !== 'nap');
     const complete = (db.rhythm && db.rhythm.completeDays) || {};
     const strengthDays = db.strength && db.strength.days ? db.strength.days : {};
@@ -192,9 +192,9 @@
       if (row.sleep === true) sleepFull++;
       if (row.meals === true && row.sleep === true) bothFull++;
     }
-    const mainSorted = mains.slice().sort((a, b) => a.startLocal.localeCompare(b.startLocal));
+    const mainSorted = mains.filter(s=>!s.durationOnly).slice().sort((a, b) => a.startLocal.localeCompare(b.startLocal));
     let beforeBed = 0, afterWake = 0;
-    for (const sleep of mains) {
+    for (const sleep of mainSorted) {
       const next = mainSorted.find((s) => s.startLocal > sleep.endLocal);
       const before = meals.some((m) => m.local <= sleep.startLocal && hoursBetween(m.local, sleep.startLocal) != null && hoursBetween(m.local, sleep.startLocal) <= 24);
       if (before) beforeBed++;
@@ -317,10 +317,10 @@
       row('st_run', 'strength', '连续力量训练', '前后日期都有力量训练的最长一段，中间空一天就断开。', '天', f.trainRun, [[2, '连两天'], [5, '连五天'], [14, '连十四天']]),
       row('st_weeks', 'strength', '有训练的周', '这一周里至少有一天力量训练，按自然周计。', '周', f.weeks, [[2, '两周'], [8, '八周'], [24, '二十四周']]),
       row('st_parts', 'strength', '练过的部位', '不同训练部位各算 1 个，例如胸、背、腿。', '个', f.parts, [[2, '两个部位'], [4, '四个部位'], [6, '六个部位']]),
-      row('st_minutes', 'strength', '手填的力量时长', '各训练日填写的分钟相加。没手填时，用以前秒表留下的时长。', '分钟', f.loggedMin, [[60, '满一小时'], [600, '满十小时'], [3000, '满五十小时']]),
+      row('st_minutes', 'strength', '力量训练累计时长', '各训练日记录的分钟相加；手填时长优先，旧记录采用计时时长。', '分钟', f.loggedMin, [[60, '满一小时'], [600, '满十小时'], [3000, '满五十小时']]),
       row('st_creatine', 'strength', '肌酸打卡', '把肌酸标成已服的天数，休息日也算。', '天', f.creatine, [[3, '肌酸三天'], [20, '肌酸二十天'], [60, '肌酸六十天']]),
       row('st_protein', 'strength', '蛋白粉打卡', '把蛋白粉标成已服的天数，休息日也算。', '天', f.protein, [[3, '蛋白粉三天'], [20, '蛋白粉二十天'], [60, '蛋白粉六十天']]),
-      row('st_min30', 'strength', '满三十分钟', '一次力量训练填写的时长满 30 分钟。', '次', f.halfHours, [[1, '跨过半小时'], [12, '十二次跨过'], [40, '四十次跨过'], [90, '九十次跨过']]),
+      row('st_min30', 'strength', '满三十分钟', '一次力量训练记录时长满 30 分钟；手填时长优先，旧记录采用计时时长。', '次', f.halfHours, [[1, '跨过半小时'], [12, '十二次跨过'], [40, '四十次跨过'], [90, '九十次跨过']]),
       row('st_full', 'strength', '按计划做完', '这一天已完成，而且每个动作的完成组数都不少于计划组数。', '天', f.fullDays, [[1, '第一次全部对上'], [8, '全部对上八天'], [24, '全部对上二十四天'], [80, '全部对上八十天']]),
       row('st_chain', 'strength', '四日内回练', '相邻两次力量训练相隔不超过 4 天，取最长的一串。', '次', f.chain, [[2, '串上两次'], [8, '串上八次'], [24, '串上二十四次'], [48, '串上四十八次']]),
       row('st_reps', 'strength', '做完的次数', '已完成组的次数相加。没负重的平板和支撑不计。', '次', f.repTotal, [[10, '记上十次'], [500, '记上五百次'], [3000, '记上三千次'], [20000, '记上两万次']]),

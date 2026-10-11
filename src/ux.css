@@ -1,4 +1,6 @@
 /* Compact surfaces retain the existing porcelain/3D visual language. */
+/* 纯提示消息不接收点击，避免遮住页面右上角的编辑操作。 */
+#toast-wrap { pointer-events: none; }
 [hidden]{display:none!important}.ux-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.ux-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:12px 0}.ux-fields label{display:grid;gap:5px}.ux-tabs{display:flex;gap:8px;overflow-x:auto;flex-wrap:nowrap}.ux-tabs>*{white-space:nowrap;flex-shrink:0}.ux-now{position:relative}.ux-now h3{margin-bottom:12px}.ux-onboarding{margin-top:10px}.ux-settings-save{margin:0 0 18px}.ux-status{position:fixed;bottom:12px;right:16px;z-index:120;background:var(--card,#fff);padding:12px;border-radius:12px}.ux-status.error{background:#ffe6dc;color:#852e14}.ux-modal-controls{display:flex;justify-content:flex-end;gap:8px}.ux-modal-controls button{font-size:12px}.ux-source{font-size:13px;padding:10px 0}.ux-care-steps{display:grid;gap:8px;margin-bottom:12px}.ux-care-steps .btn{text-align:left;white-space:normal}.ux-video-controls{display:flex;gap:5px;padding:8px;flex-wrap:wrap}.ux-video-controls small{font-size:11px;color:var(--muted,#65738a)}#ux-library-panel>summary{cursor:pointer;padding:14px;font-weight:650}.ux-set-action{margin:15px 0;padding:10px;border:1px solid #9d9dba45;border-radius:10px}.ux-set-row{display:grid;grid-template-columns:65px 1fr 1fr auto;gap:10px;align-items:end;padding:8px 0}.ux-set-row label{display:grid;gap:4px;font-size:12px}.ux-photo-compare{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:relative;height:320px}.ux-photo-compare>div{overflow:hidden;background:#9096a31c;position:relative}.ux-photo-compare img{width:100%;height:100%;object-fit:contain;transform-origin:center}.ux-photo-compare.overlay{display:block}.ux-photo-compare.overlay>div{position:absolute;inset:0}.ux-photo-compare.overlay>div:last-child{background:transparent}.ux-reminder-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #9993;padding:10px}.ux-reminder-row b{flex:1}.ux-draft-hint{color:var(--accent,#645bc4);margin:4px 0 10px}#ux-import-results p{overflow-wrap:anywhere}#ux-settings-form label{font-size:14px}#ux-backup .ux-actions{margin:12px 0}.sk-seg button:not(.on) img[data-icon-name="check"],.sk-seg button:not(.on) .icon-3d{display:none}.today-top{min-height:180px!important}.today-top-main{min-height:170px!important;padding:22px!important}.today-title{font-size:32px!important}.today-top-hint{font-size:13px!important}#view-root{overflow-x:hidden}.btn,.nav-item{overflow-wrap:normal;word-break:keep-all}.st-tabs{overflow-x:auto;flex-wrap:nowrap!important}.st-tabs>*{white-space:nowrap;flex-shrink:0}#modal-card{max-height:88vh;overflow:auto}#modal-card:focus{outline:none}.dark .ux-status:not(.error){background:#252538;color:#fff}.dark .ux-source,.dark .ux-fields label{color:#e3e4ec}.dark .card{background-color:rgba(28,32,49,.96)}
 @media(max-width:1050px){#view-root{padding:16px!important}.card{padding:16px!important}.today-top{min-height:160px!important}.today-title{font-size:28px!important}.btn-go{font-size:16px!important;white-space:nowrap}.st-tr{gap:8px!important}.st-timer-row{flex-wrap:wrap}.ux-set-row{grid-template-columns:55px 1fr 1fr auto}.sk-cols3{grid-template-columns:1fr!important}.nav-item{white-space:nowrap}#sidebar{width:185px!important;min-width:185px!important}.ux-now .btn{font-size:13px;min-height:38px}.ux-photo-compare{height:260px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
@@ -12,11 +14,12 @@
 .ux-home-video{width:100%;max-width:360px;justify-self:end}
 .ux-home-video-heading{display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:12px;color:var(--muted,#647089)}
 .ux-home-video-heading>span{flex-shrink:0;font-weight:650}
-.ux-home-video-heading select{min-width:0;width:100%;font:inherit;color:inherit;background:rgba(255,255,255,.6);border:1px solid #8e95b02e;border-radius:8px;padding:5px 8px;cursor:pointer;text-overflow:ellipsis}
+.ux-home-video-picker{min-width:0;flex:1}.ux-home-video-picker select{display:none}.ux-home-video-trigger{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;width:100%;font:inherit;color:inherit;background:rgba(255,255,255,.6);border:1px solid #8e95b02e;border-radius:8px;padding:5px 8px;cursor:pointer;text-align:left}.ux-home-video-trigger span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ux-home-video-trigger b{font-size:16px;line-height:10px}
+.ux-home-video-menu{position:fixed;z-index:300;display:grid;grid-template-columns:minmax(0,1fr) 210px;gap:8px;max-height:min(380px,70vh);padding:8px;border:1px solid #8e95b047;border-radius:14px;background:rgba(255,255,255,.98);box-shadow:0 16px 40px #292c4b35;color:var(--text,#182133)}.ux-home-video-options{min-width:0;overflow-y:auto}.ux-home-video-option{display:block;width:100%;padding:9px 10px;border:0;border-radius:8px;background:none;color:inherit;font:inherit;font-size:13px;text-align:left;cursor:pointer;overflow-wrap:anywhere}.ux-home-video-option:hover,.ux-home-video-option.is-hovered,.ux-home-video-option:focus-visible{background:#eeeafd;outline:none}.ux-home-video-option[aria-selected="true"]{font-weight:700}.ux-home-video-preview{min-width:0;display:flex;flex-direction:column;gap:7px;padding:5px;border-left:1px solid #8e95b030;font-size:12px}.ux-home-video-preview-cover{position:relative;aspect-ratio:16/9;overflow:hidden;border-radius:9px;background:linear-gradient(135deg,#e3dff9,#eef3fb 50%,#cbddea)}.ux-home-video-preview-cover img{width:100%;height:100%;object-fit:cover}.ux-home-video-preview-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:5px;color:#67738c}.ux-home-video-preview-empty .icon3d{width:42px;height:42px}.ux-home-video-preview strong{line-height:1.4;overflow-wrap:anywhere}.ux-home-video-preview>small{color:var(--muted,#647089)}
 .ux-home-video-card{display:block;width:100%;padding:0;border:1px solid rgba(126,118,190,.22);border-radius:16px;overflow:hidden;background:rgba(255,255,255,.85);color:var(--text,#182133);text-align:left;cursor:pointer;box-shadow:0 6px 18px #57578312;transition:transform .18s,box-shadow .18s;font:inherit}
 .ux-home-video-card:hover{transform:translateY(-2px);box-shadow:0 10px 22px #57578325}
 .ux-home-video-card:active{transform:translateY(0)}
-.ux-home-video-card:focus-visible,.ux-home-video-heading select:focus-visible{outline:3px solid #897cf0;outline-offset:4px}
+.ux-home-video-card:focus-visible,.ux-home-video-trigger:focus-visible{outline:3px solid #897cf0;outline-offset:4px}
 .ux-home-video-cover{display:block;position:relative;aspect-ratio:16/9;overflow:hidden;background:linear-gradient(135deg,#e3dff9,#eef3fb 50%,#cbddea)}
 .ux-home-video-fallback{position:absolute;inset:0;display:grid;place-items:center;padding-bottom:22px;background:radial-gradient(ellipse at 75% 20%,#fff9,transparent 70%)}
 .ux-now .ux-home-video-fallback .icon3d{width:64px;height:64px;opacity:.7;transform:rotate(-8deg)}
@@ -29,12 +32,13 @@
 .ux-home-video-caption strong{font-size:13px;font-weight:650;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 .ux-home-video-caption small{font-size:11px;color:var(--muted,#647089);line-height:1.4}
 html.dark .ux-home-video-card{background:#282b40;border-color:#ada2ee38;color:#f0edf8}
-html.dark .ux-home-video-heading select{background:#292b40;color:#e3def5;border-color:#aaa0da38}
+html.dark .ux-home-video-trigger,html.dark .ux-home-video-menu{background:#292b40;color:#e3def5;border-color:#aaa0da38}html.dark .ux-home-video-option:hover,html.dark .ux-home-video-option.is-hovered,html.dark .ux-home-video-option:focus-visible{background:#474165}
 html.dark .ux-home-video-cover{background:linear-gradient(135deg,#37344f,#29334a 55%,#354657)}
 html.dark .ux-home-video-fallback{background:radial-gradient(ellipse at 75% 20%,#8c84c81f,transparent 70%)}
 html.dark .ux-home-video-heading,html.dark .ux-home-video-caption small{color:#b7b6d0}
 @media(max-width:1050px){.ux-now-with-video{grid-template-columns:minmax(0,1fr) 230px;gap:16px}.ux-home-video-caption{padding:9px 11px}.ux-home-video-launch{bottom:10px}}
 @media(max-width:760px){.ux-now-with-video{grid-template-columns:1fr}.ux-home-video{max-width:none;justify-self:stretch}}
+@media(max-width:560px){.ux-home-video-menu{grid-template-columns:minmax(0,1fr) 140px}.ux-home-video-option{font-size:12px;padding:8px}.ux-home-video-preview{font-size:11px}}
 
 /* 「现在做什么」自选板块：两列有序网格 + 3D 加号 + 管理弹层。 */
 .ux-actions-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:2px}
@@ -151,4 +155,40 @@ html.dark .ux-switch input:checked+i{background:#48a982}
 }
 @media(max-width:640px){
   .ux-set-fields,.ux-set-times,.ux-set-actions,.ux-set-pair{grid-template-columns:1fr}
+}
+
+/* 视频计时：状态和进度共享文字区，操作按钮保持横向排列。 */
+#stage-wrap { container-type: inline-size; container-name: follow-player; }
+.timer-hud {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px 24px;
+  padding: 18px 24px;
+}
+.timer-hud .timer-big { min-width: 0; white-space: nowrap; }
+.timer-details { min-width: 0; display: grid; gap: 8px; }
+.timer-hud .timer-meta { line-height: 1.6; overflow-wrap: break-word; }
+.timer-actions { display: flex; align-items: center; flex-wrap: nowrap; gap: 8px; }
+.timer-actions .btn { flex: 0 0 auto; white-space: nowrap; min-height: 40px; padding: 8px 12px; }
+.timer-hud .t-complete { display: grid; gap: 6px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.t-complete-track { width: 100%; max-width: 200px; height: 4px; overflow: hidden; border-radius: 4px; background: rgba(127, 115, 230, .16); }
+.t-complete-track i { display: block; height: 100%; background: var(--accent, #7f73e6); border-radius: inherit; }
+@container follow-player (max-width: 760px) {
+  .timer-hud { grid-template-columns: auto minmax(0, 1fr); gap: 12px 20px; padding: 16px 20px; }
+  .timer-actions { grid-column: 1 / -1; justify-content: flex-end; }
+  .timer-hud .timer-big { font-size: 40px; }
+}
+
+/* 侧栏导航对齐（2026-10-11 F）：静态条目与视频板块条目的图标盒宽度此前不一致
+   （52px vs 40px，窄档 30px vs 38px），导致图标不在同一竖线、文字起点参差。
+   这里用 #sidebar #nav 前缀提高优先级（晚加载的 awakening/soft-controls 也被覆盖），
+   统一为宽档 52px、窄档 30px（跟随 image-3d/awakening 的主设计），图标盒内居中。
+   只修对齐：圆角、底色、字号、行高均不变。 */
+#sidebar #nav .nav-item { gap: 14px; }
+#sidebar #nav .nav-item > .nav-ico { display: grid; place-items: center; width: 52px; height: 40px; flex: 0 0 52px; margin: 0; }
+#sidebar #nav .nav-item > .nav-ico .icon3d, #sidebar #nav .nav-item > .nav-ico .icon-3d { width: 40px; height: 40px; margin: 0; vertical-align: 0; }
+@media (max-width:1050px),(max-height:720px){
+  #sidebar #nav .nav-item { gap: 8px; }
+  #sidebar #nav .nav-item > .nav-ico { width: 30px; height: 30px; flex-basis: 30px; }
+  #sidebar #nav .nav-item > .nav-ico .icon3d, #sidebar #nav .nav-item > .nav-ico .icon-3d { width: 30px; height: 30px; }
 }

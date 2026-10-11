@@ -213,7 +213,8 @@
         acid.forEach(a => emit(pairKey(s, a), RULE.R_SCRUB_ACID, { products: [s.name, a.name], phases: [ph] }));
         ret.forEach(a => emit(pairKey(s, a), RULE.R_SCRUB_VA, { products: [s.name, a.name], phases: [ph] }));
       });
-      ret.forEach(a => vc.forEach(b => emit(pairKey(a, b), RULE.R_VC_ACID, { products: [a.name, b.name], phases: [ph] })));
+      /* VC × 酸同场；不要把维A × VC 记到这条酸类规则上 */
+      acid.forEach(a => vc.forEach(b => emit(pairKey(a, b), RULE.R_VC_ACID, { products: [a.name, b.name], phases: [ph] })));
       bpo.forEach(b => acid.concat(vc).forEach(a => emit(pairKey(b, a), RULE.R_BPO_IRRIT, { products: [b.name, a.name], phases: [ph] })));
       hq.forEach(h => bpo.concat(acid, ret, vc).forEach(a => emit(pairKey(h, a), RULE.R_HQ_IRRIT, { products: [h.name, a.name], phases: [ph] })));
       alc.forEach(al => ret.concat(acid, bpo).forEach(a => emit(pairKey(al, a), RULE.R_ALCOHOL_ACTIVE, { products: [al.name, a.name], phases: [ph] })));

@@ -78,3 +78,16 @@ test('glycemicScore：sugarLog 越界脏数据按缺档处理，不再 TypeError
   assert.equal(g2.factors.some(f => f.key === 'sugar'), false); // 越界档不参与计分
   assert.equal(g2.factors.length, 2); // 跨度 + 晚间两因子照常
 });
+
+test('glycemicScore：当天最后一条是 01:00 时按夜宵计，late 因子不是 100，并提示末餐偏晚', () => {
+  const at = (time) => Engine.glycemicScore(Engine.normalize({ meals: mealsOf([[time]]) }), '2026-09-18');
+  const late = at('01:00');
+  const factor = late.factors.find((f) => f.key === 'late');
+  assert.notEqual(factor.factor, 100);
+  assert.equal(factor.factor, 50);
+  assert.ok(late.tomorrowActions.some((a) => a.includes('末餐偏晚')));
+  assert.equal(at('07:00').factors.find((f) => f.key === 'late').factor, 100);
+  assert.equal(at('19:00').factors.find((f) => f.key === 'late').factor, 100);
+  assert.equal(at('21:45').factors.find((f) => f.key === 'late').factor, 50);
+  assert.equal(at('23:30').factors.find((f) => f.key === 'late').factor, 50);
+});

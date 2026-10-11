@@ -156,3 +156,17 @@ test('外部照片目录恢复中断会滚回原图', () => {
     fs.rmSync(target, { recursive: true, force: true });
   }
 });
+
+test('listVideoFiles 保留带空格的原名，不把课 1.mp4 改成课-1.mp4', () => {
+  const d = dir();
+  try {
+    fs.writeFileSync(path.join(d, '课 1.mp4'), 'lesson');
+    assert.deepEqual(P.listVideoFiles(d), ['课 1.mp4']);
+    assert.equal(fs.existsSync(path.join(d, '课 1.mp4')), true);
+    assert.equal(fs.existsSync(path.join(d, '课-1.mp4')), false);
+    const again = P.importVideoFile(path.join(d, '课 1.mp4'), d);
+    assert.equal(again.copied, false);
+    assert.equal(again.path, path.resolve(d, '课 1.mp4'));
+    assert.equal(fs.existsSync(path.join(d, '课-1.mp4')), false);
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});

@@ -44,6 +44,110 @@
     return readyWaiter;
   }
 
+  function importMeal(meal) {
+    if (!meal || !/^[a-f0-9]{64}$/.test(meal.sourceKey || '') ||
+        !Number.isSafeInteger(meal.revision) || !/^20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(meal.local || '') ||
+        !['active','cancelled'].includes(meal.state) || !['started','finished'].includes(meal.timeKind) ||
+        typeof meal.foodText !== 'string' || meal.foodText.length > 180 ||
+        !Number.isSafeInteger(meal.photoCount) || meal.photoCount < 0 || meal.photoCount > 1000 ||
+        !Number.isFinite(Date.parse(meal.at || '')) || !meal.at.startsWith(meal.local + ':') || !meal.at.endsWith('+08:00')) {
+      return {ok:false,error:'餐食字段无效'};
+    }
+    const rhythm = Store.db.rhythm = RhythmEngine.normalize(Store.db.rhythm);
+    const imports = rhythm.mealImportVersions || {};
+    const known = imports[meal.sourceKey];
+    const existing = rhythm.meals.find(m => m.sourceKey === meal.sourceKey);
+    if (known?.state === 'manual-deleted') return {ok:false,conflict:true,error:'这餐已在应用内删除，不会自动恢复'};
+    if (existing && existing.manualOverride) return {ok:false,conflict:true,error:'这餐已在应用内手动修改，请先在应用内核对'};
+    if (known && known.revision > meal.revision) return {ok:true,sourceKey:meal.sourceKey,stale:true};
+    if (known && known.revision === meal.revision && known.state === 'cancelled' && meal.state === 'active') {
+      return {ok:true,sourceKey:meal.sourceKey,stale:true};
+    }
+    if (meal.state === 'active' && !existing && rhythm.meals.some(m => m.local === meal.local)) {
+      return {ok:false,conflict:true,error:'同一分钟已有应用内进餐记录，请先核对避免重复'};
+    }
+    if (!RhythmEngine.parse(meal.local)) return {ok:false,error:'进餐日期或时刻无效'};
+    const mealType = RhythmEngine.classifyMealType(meal.local);
+    if (meal.state === 'active' && !mealType) return {ok:false,error:'进餐时刻无效'};
+    if (existing && meal.state === 'active' && existing.local === meal.local &&
+        existing.sourceRevision === meal.revision && existing.foodText === meal.foodText &&
+        existing.photoCount === meal.photoCount && existing.timeKind === meal.timeKind) {
+      return {ok:true,sourceKey:meal.sourceKey,alreadyDone:true};
+    }
+    const previous = structuredClone(rhythm);
+    try {
+      rhythm.mealImportVersions = imports;
+      rhythm.mealImportVersions[meal.sourceKey] = {revision:meal.revision,state:meal.state};
+      if (meal.state === 'cancelled') {
+        rhythm.meals = rhythm.meals.filter(m => m.sourceKey !== meal.sourceKey);
+      } else {
+        const record = {...existing,
+          id: existing?.id || 'wx-meal-' + meal.sourceKey.slice(0,24),
+          source:'weixin-life-diary',sourceKey:meal.sourceKey,sourceRevision:meal.revision,
+          at:new Date(meal.at).toISOString(),local:meal.local,offset:480,
+          kind:RhythmEngine.mealTypeKind(mealType) === 'snack' ? 'snack' : 'meal',mealType,
+          foodText:meal.foodText,photoCount:meal.photoCount,timeKind:meal.timeKind};
+        if (existing) rhythm.meals[rhythm.meals.indexOf(existing)] = record;
+        else rhythm.meals.push(record);
+      }
+      rhythm.completeDays = rhythm.completeDays || {};
+      if (existing?.local) rhythm.completeDays[existing.local.slice(0,10)] = {...rhythm.completeDays[existing.local.slice(0,10)],meals:false};
+      rhythm.completeDays[meal.local.slice(0,10)] = {...rhythm.completeDays[meal.local.slice(0,10)],meals:false};
+      Store.save(true);
+      return {ok:true,sourceKey:meal.sourceKey,state:meal.state};
+    } catch {
+      Store.db.rhythm = previous;
+      return {ok:false,retryable:true,error:'应用存储暂不可用，稍后重试'};
+    }
+  }
+
+  function importPhoto(photo) {
+    if(!photo || !/^[a-f0-9]{64}$/.test(photo.sourceKey || '') ||
+        !Number.isSafeInteger(photo.revision) || photo.revision<1 ||
+        !['meal','skin','body'].includes(photo.kind) || !RhythmEngine.parse(photo.local) ||
+        !/^wx-[a-f0-9]{64}\.(jpg|png|webp|heic)$/.test(photo.file || '') ||
+        !/^[a-f0-9]{64}$/.test(photo.sha256 || '') || !['sent','occurred'].includes(photo.timeKind) ||
+        typeof photo.at!=='string' || !photo.at.startsWith(photo.local+':') || !photo.at.endsWith('+08:00') ||
+        !Number.isFinite(Date.parse(photo.sentAt)) || typeof photo.note!=='string' || photo.note.length>180 ||
+        (photo.mealSourceKey!=null && !/^[a-f0-9]{64}$/.test(photo.mealSourceKey))) {
+      return {ok:false,error:'照片记录字段无效'};
+    }
+    const previous={rhythm:structuredClone(Store.db.rhythm),skin:structuredClone(Store.db.skin),
+      photoImportVersions:structuredClone(Store.db.photoImportVersions)};
+    const versions=Store.db.photoImportVersions || {};
+    const known=versions[photo.sourceKey];
+    const receipt={ok:true,sourceKey:photo.sourceKey,sha256:photo.sha256,kind:photo.kind,file:photo.file};
+    if(known?.state==='manual-deleted')return {ok:false,conflict:true,error:'这张照片已在应用内删除，请先核对'};
+    if(known && known.revision>photo.revision)return {...receipt,stale:true};
+    try {
+      Store.db.rhythm=RhythmEngine.normalize(Store.db.rhythm);
+      Store.db.skin=Store.db.skin || {photos:[]};
+      const mealPhotos=Store.db.rhythm.mealPhotos || [];
+      const skinPhotos=Store.db.skin.photos || [];
+      const existing=[...mealPhotos,...skinPhotos].find(p=>p.sourceKey===photo.sourceKey);
+      if(existing && existing.sha256!==photo.sha256)return {ok:false,conflict:true,error:'原始照片摘要发生变化，请先核对'};
+      if(existing && ['sourceRevision','kind','file','sha256','local','sentAt','timeKind','note','mealSourceKey'].every(key=>
+          existing[key]===(key==='sourceRevision' ? photo.revision : photo[key])))return {...receipt,alreadyDone:true};
+      const record={...existing,id:existing?.id || 'wx-photo-'+photo.sourceKey.slice(0,24),
+        source:'weixin-life-diary',sourceKey:photo.sourceKey,sourceRevision:photo.revision,
+        kind:photo.kind,file:photo.file,sha256:photo.sha256,mime:photo.mime,
+        local:photo.local,at:photo.at,sentAt:photo.sentAt,timeKind:photo.timeKind,
+        date:photo.local.slice(0,10),note:photo.note,mealSourceKey:photo.mealSourceKey,
+        angle:existing?.angle || 'unknown',createdAt:photo.sentAt};
+      Store.db.rhythm.mealPhotos=mealPhotos.filter(p=>p.sourceKey!==photo.sourceKey);
+      Store.db.skin.photos=skinPhotos.filter(p=>p.sourceKey!==photo.sourceKey);
+      (photo.kind==='meal' ? Store.db.rhythm.mealPhotos : Store.db.skin.photos).push(record);
+      versions[photo.sourceKey]={revision:photo.revision,state:'active',kind:photo.kind};
+      Store.db.photoImportVersions=versions;
+      Store.save(true);
+      return receipt;
+    }catch{
+      Store.db.rhythm=previous.rhythm;Store.db.skin=previous.skin;
+      Store.db.photoImportVersions=previous.photoImportVersions;
+      return {ok:false,retryable:true,error:'照片记录暂时无法保存，稍后重试'};
+    }
+  }
+
   /* ---------- 力量训练 ---------- */
   function strengthContext() {
     const state = Core.normalize(Store.db);
@@ -173,8 +277,10 @@
   async function handle(payload) {
     const op = payload && payload.op;
     const id = payload && payload.id;
-    if (!(await ensureReady())) return { ok: false, error: '应用数据尚未加载完成，请稍后重试' };
+    if (!(await ensureReady())) return { ok: false, retryable: true, error: '应用数据尚未加载完成，请稍后重试' };
     try {
+      if (op === 'meal-import') return importMeal(payload.meal);
+      if (op === 'photo-import') return importPhoto(payload.photo);
       if (op === 'skip-today') {
         if (id !== 'strength') return { ok: false, error: 'skip-today 仅支持力量训练（id: strength）' };
         return doSkipStrength();

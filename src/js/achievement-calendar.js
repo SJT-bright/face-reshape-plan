@@ -66,8 +66,8 @@
             const log = ((Store.db.skin || {}).logs || {})[d];
             const sc = log ? SkinEngine.scoreSkin(log) : null;
             if (sc && sc.score !== null) skinScores.push(sc.score);
-            const sl = ((Store.db.rhythm || {}).sleeps || []).filter(s => s.end && s.kind !== 'nap' && String(s.endLocal || '').slice(0, 10) === d)
-              .sort((a, b) => (Date.parse(b.end) - Date.parse(b.start)) - (Date.parse(a.end) - Date.parse(a.start)))[0];
+            const sl = ((Store.db.rhythm || {}).sleeps || []).filter(s => RhythmEngine.hasSleep(s) && s.kind !== 'nap' && String(s.endLocal || '').slice(0, 10) === d)
+              .sort((a, b) => RhythmEngine.sleepMinutes(b)-RhythmEngine.sleepMinutes(a))[0];
             if (sl) sleepList.push(RhythmEngine.sleepMinutes(sl));
             const ms = ((Store.db.rhythm || {}).meals || []).filter(m => typeof m.local === 'string' && m.local.slice(0, 10) === d).sort((a, b) => a.local.localeCompare(b.local));
             if (ms.length >= 2) spanList.push((Date.parse(ms[ms.length - 1].local) - Date.parse(ms[0].local)) / 3600000);
@@ -81,7 +81,7 @@
           const avg = arr => arr.length ? Math.round(arr.reduce((s, x) => s + x, 0) / arr.length) : null;
           const skinAvg = avg(skinScores), sleepAvg = avg(sleepList), spanAvg = avg(spanList), focusAvg = avg(focusList);
           const rows = [
-            ['🏋️ 训练', `${trained} 练 · 共 ${minutesSum} 分钟 · 达标 ${metDays} 天`],
+            ['🏋️ 训练', `${trained} 天有记录 · 共 ${minutesSum} 分钟 · 达标 ${metDays} 天`],
             ['🔬 皮肤', skinAvg !== null ? `记录 ${skinScores.length} 天 · 平均 ${skinAvg} 分` : '本周未记录'],
             ['😴 睡眠', sleepAvg !== null ? `记录 ${sleepList.length} 晚 · 平均 ${Math.round(sleepAvg / 6) / 10} 小时` : '本周未记录'],
             ['🍚 进食跨度', spanAvg !== null ? `${spanList.length} 天有 ≥2 次记录 · 平均 ${Math.round(spanAvg * 10) / 10} 小时` : '记录不足（每天 ≥2 次才统计）'],
@@ -97,7 +97,7 @@
       const status = seconds >= target ? '已达标' : seconds > 0 ? '未达目标' : '尚未记录';
       const icon = name => Icon3D.makeIcon(name).outerHTML;
       host.innerHTML = `
-        <div class="ac-heading"><div><h3>${icon('calendar')}达标日历</h3><p>把每一天的坚持，记在日期上。</p></div><button class="btn small" id="ac-manual">${icon('edit')}手动补记</button></div>
+        <div class="ac-heading"><div><h3>${icon('calendar')}达标日历</h3><p>记录跟练计时和手动补记的时长，按当日目标显示达标情况。</p></div><button class="btn small" id="ac-manual">${icon('edit')}手动补记</button></div>
         <div class="ac-toolbar"><div class="ac-month-title"><label for="ac-month">查看月份</label><input id="ac-month" aria-label="选择查看月份" type="month" min="2000-01" max="${currentMonth}" value="${this.month}"></div><div class="ac-navigation"><button class="btn small ghost" id="ac-prev" ${this.month === '2000-01' ? 'disabled' : ''}>${icon('calendar')}上月</button><button class="btn small ghost" id="ac-today">${icon('target')}回到今天</button><button class="btn small ghost" id="ac-next" ${this.month === currentMonth ? 'disabled' : ''}>${icon('calendar')}下月</button></div></div>
         <div class="ac-layout"><div class="ac-month-panel">
           <div class="ac-weekdays" aria-hidden="true">${['一','二','三','四','五','六','日'].map(w => `<span>${w}</span>`).join('')}</div>

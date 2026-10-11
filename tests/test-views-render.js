@@ -13,6 +13,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const StoreCore = require('../src/js/store');
 
 /* ---------- 真实 util（todayKey/esc/fmtSeconds/followCompletion/$/… 进入全局） ---------- */
 const util = require('../src/js/util');
@@ -104,7 +105,7 @@ function makeStore() {
     videos: [],
     logs: { training: {}, skincare: {} }
   };
-  return {
+  return Object.assign(Object.create(StoreCore), {
     db,
     settings() { return db.settings; },
     save() { saveCalls++; },
@@ -113,7 +114,7 @@ function makeStore() {
     daySkincare() { return {}; },
     stats() { return { totalSec: 0, bestStreak: 0, metDays: 0, streak: 0, skStreak: 0 }; },
     followTotals() { return { completed: 0, total: 0 }; }
-  };
+  });
 }
 
 function makeApp() {
@@ -179,6 +180,42 @@ test('Views.plan：快捷导入默认收成 details 芯片，不含 open，表�
   assert.ok(!html.includes('<h3>⚡ 快捷导入训练计划'), '不再用整张卡片占首屏');
 });
 
+test('Views.importModal：部分视频信息获取失败时说明仅保存了链接', async () => {
+  reset();
+  const oldOpenModal = global.openModal;
+  const oldCloseModal = global.closeModal;
+  const oldBilibili = global.Bilibili;
+  const oldVideoLink = global.VideoLink;
+  const oldWindow = global.window;
+  try {
+    const card = makeEl();
+    register('#imv-text', { value: 'BV1ok\nBV1pending' });
+    register('#imv-add');
+    register('#imv-local');
+    global.openModal = () => card;
+    global.closeModal = () => {};
+    global.Bilibili = { parse: line => ({ bvid: line, page: 1 }) };
+    global.VideoLink = { parse: line => ({ source: 'bilibili', bvid: line, aid: null, page: 1 }) };
+    global.window = { native: { fetchBilibiliInfo: async id => id === 'BV1ok'
+      ? { ok: true, title: '已获取信息的视频', durationSec: 300 }
+      : { ok: false } } };
+
+    Views.importModal();
+    await registry.get('#imv-add').onclick();
+
+    assert.equal(Store.db.videos.length, 2);
+    assert.equal(Store.db.videos[1].title, 'BV1pending', '获取失败的视频只保存 BV 引用');
+    assert.ok(toasts.includes('已保存 2 个视频，其中 1 个仅保存链接，视频信息待获取'));
+    assert.equal(saveCalls, 1);
+  } finally {
+    global.openModal = oldOpenModal;
+    global.closeModal = oldCloseModal;
+    global.Bilibili = oldBilibili;
+    global.VideoLink = oldVideoLink;
+    global.window = oldWindow;
+  }
+});
+
 /* ================= 用例 1：提醒中枢渲染 ================= */
 test('Views.plan：提醒中枢聚合渲染训练会话/护肤三时段/皮肤记录与夜间开关', () => {
   reset();
@@ -187,8 +224,9 @@ test('Views.plan：提醒中枢聚合渲染训练会话/护肤三时段/皮肤�
   const html = root.capturedHtml;
   for (const expected of [
     '提醒中枢',
-    '⏰ 训练会话提醒',
+    '⏰ 跟练安排提醒',
     '晨练 07:40',
+    '按安排日期',
     '🧴 护肤三时段',
     '08:00',
     '📝 皮肤状态记录',
@@ -236,19 +274,24 @@ test('syncTimerUI：完播进度条显隐、宽度与剩余分钟文案', () => 
   assert.equal(registry.get('#t-complete').hidden, false, '有视频时长且进行中应显示完播进度条');
   assert.equal(registry.get('#t-complete-fill').style.width, '100%', '500/480 超过 100% 应封顶');
   assert.ok(
-    registry.get('#t-complete-text').textContent.includes('已达完整跟练门槛'),
-    `达标文案应含「已达完整跟练门槛」，实际：${registry.get('#t-complete-text').textContent}`
+    registry.get('#t-complete-text').textContent.includes('已达到完整跟练门槛'),
+    `达标文案应含「已达到完整跟练门槛」，实际：${registry.get('#t-complete-text').textContent}`
   );
   assert.equal(registry.get('#t-stop').disabled, false, '进行中应允许结束并记录');
+  assert.equal(registry.get('#t-stop').textContent, '✓ 结束并记录');
 
   Session.active.seconds = 300;
   Views.syncTimerUI(root);
 
   assert.equal(registry.get('#t-complete-fill').style.width, '63%', '300/480=62.5%，Math.round → 63%');
   assert.ok(
-    registry.get('#t-complete-text').textContent.includes('还差 3 分钟'),
-    `未达标文案应含「还差 3 分钟」，实际：${registry.get('#t-complete-text').textContent}`
+    registry.get('#t-complete-text').textContent.includes('完整跟练门槛 63% · 还差 3 分钟'),
+    `未达标文案应明确门槛进度，实际：${registry.get('#t-complete-text').textContent}`
   );
+
+  Session.active = { videoId: 'v1', seconds: 0, awaitingPlay: true };
+  Views.syncTimerUI(root);
+  assert.equal(registry.get('#t-stop').textContent, '结束（不记录）', '尚未播放时不能承诺会保存记录');
 });
 
 /* ================= 用例 4：成就等级系列与解锁（badgeSeries / seriesProgress / checkBadgeUnlocks） ================= */

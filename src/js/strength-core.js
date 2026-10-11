@@ -58,7 +58,9 @@
       cycle: src.cycle && typeof src.cycle === 'object' ? src.cycle : {},
       days: src.days && typeof src.days === 'object' ? src.days : {},
       events: Array.isArray(src.events) ? src.events : [],
-      progress: Array.isArray(src.progress) ? src.progress : []
+      progress: Array.isArray(src.progress) ? src.progress : [],
+      baselines: src.baselines && typeof src.baselines === 'object' ? src.baselines : {},
+      adjustments: Array.isArray(src.adjustments) ? src.adjustments : []
     };
     /* 身体档案（身高体重等）随白名单一并保留——此前每次渲染力量页都会把它抹掉，
        营养参考卡与进步可视化的输入会跨页面丢失（02:30 监督复核 P1-1） */
@@ -199,6 +201,15 @@
     }
     const nextRevision = tpl.currentRevision + 1;
     if (nextRevision > MAX_REVISION) return fail('版本号已达上限');
+    if (!state.cycle || typeof state.cycle !== 'object') state.cycle = {};
+    if (!state.cycle[tpl.id] || !state.cycle[tpl.id].currentDayKey) {
+      const existingDays = (currentVersion(tpl) || {}).days || [];
+      state.cycle[tpl.id] = {
+        currentDayKey: (existingDays[0] && existingDays[0].dayKey) || '',
+        revision: tpl.currentRevision || 1,
+        updatedAt: stamp
+      };
+    }
     tpl.versions.push({
       revision: nextRevision, effectiveFrom: businessDate(now),
       changeNote: String(input.changeNote || '').trim() || '更新计划', createdAt: stamp,
@@ -323,6 +334,15 @@
     return { ok: true, day };
   }
 
+  /* Defaults are unconfirmed until the user explicitly saves actual data. */
+  function trainingBaseline(state, action, date) {
+    const saved=state.baselines?.[actionNameKey(action.name)];
+    const last=lastActual(state,action.name,date,true)?.action;
+    const source=saved&&saved.date<=date?saved:last;
+    const weight=parseWeightInput(action.plannedWeightText);
+    const planWeight=weight.ok&&weight.value!=null?weight.value:Number(String(action.plannedWeightText||'').match(/\d+(?:\.\d+)?/)?.[0]||0);
+    return {setsDone:source?.setsDone??action.plannedSets??0,repsText:source?.repsText||action.plannedRepsText||'0',weightKg:source?.weightKg??planWeight,sets:source?.sets,source:source?'saved':'plan'};
+  }
   /* save-training：只更新实际完成数据；不动计划快照。 */
   function saveTraining(state, input, now) {
     const date = input.date || businessDate(now);
@@ -333,6 +353,7 @@
     /* actions 可省略：补剂/备注/确认时长等部分字段保存不带动作补丁 */
     if (input.actions !== undefined && !Array.isArray(input.actions)) return fail('实际数据无效');
     const patches = input.actions || [];
+    const priorBaselines=new Map(day.actions.map(a=>[a.actionKey,trainingBaseline(state,a,date)]));
     const byKey = new Map(day.actions.map((a) => [a.actionKey, a]));
     for (const patch of patches) {
       const target = byKey.get(patch.actionKey);
@@ -345,7 +366,7 @@
       if(patch.sets !== undefined){
         if(!Array.isArray(patch.sets)||patch.sets.length>100||patch.sets.some(s=>!Number.isInteger(s.reps)||s.reps<0||s.reps>999||!validateWeightKg(s.weightKg)))return fail('逐组记录无效');
         target.sets=JSON.parse(JSON.stringify(patch.sets));target.actualSource='per-set';
-      } else if(target.sets && ((patch.setsDone!==undefined&&patch.setsDone!==target.setsDone)||(patch.repsText!==undefined&&patch.repsText!==target.repsText)||(patch.weightKg!==undefined&&patch.weightKg!==target.weightKg))) {
+      } else if(patch.summaryEdited && target.sets && ((patch.setsDone!==undefined&&patch.setsDone!==target.setsDone)||(patch.repsText!==undefined&&patch.repsText!==target.repsText)||(patch.weightKg!==undefined&&patch.weightKg!==target.weightKg))) {
         delete target.sets; target.actualSource='summary';
       }
       if (patch.setsDone !== undefined) target.setsDone = patch.setsDone;
@@ -383,6 +404,16 @@
       day.status = 'in-progress';
       day.startedAt = day.startedAt || (now || new Date()).toISOString();
     }
+    if(patches.length){
+      state.baselines||={};state.adjustments||=[];
+      for(const patch of patches){
+        if(patch.setsDone===undefined&&patch.repsText===undefined&&patch.weightKg===undefined&&patch.sets===undefined)continue;
+        const a=byKey.get(patch.actionKey),before=priorBaselines.get(patch.actionKey);
+        const after={setsDone:a.setsDone,repsText:a.repsText,weightKg:a.weightKg,...(a.sets?{sets:JSON.parse(JSON.stringify(a.sets))}:{})};
+        const adjustment={id:uid('adjust'),date,actionKey:a.actionKey,name:a.name,savedAt:(now||new Date()).toISOString(),before:{setsDone:before.setsDone,repsText:before.repsText,weightKg:before.weightKg},after};
+        state.adjustments.push(adjustment);state.baselines[actionNameKey(a.name)]={...after,date,savedAt:adjustment.savedAt};
+      }
+    }
     day.revision += 1;
     return { ok: true, day };
   }
@@ -407,6 +438,7 @@
     const day = got.day;
     if (day.status === 'completed' || day.status === 'skipped') return fail('这一天已经收尾');
     if (input.note !== undefined && typeof input.note === 'string' && input.note.length > 4000) return fail('收尾备注过长');
+    const alreadyAdvanced = !!(day.resolution && day.resolution.cycleAdvanced);
     const allDone = day.actions.length > 0 && day.actions.every((a) => a.setsDone !== null && a.setsDone !== undefined && a.setsDone >= a.plannedSets);
     const touched = day.actions.some((a) => a.setsDone !== null && a.setsDone !== undefined);
     day.resolution = { outcome: 'completed', note: String(input.note || ''), cycleAdvanced: true, resolvedAt: (now || new Date()).toISOString() };
@@ -415,7 +447,7 @@
     day.pausedAt = null;
     day.revision += 1;
     const tpl = templateById(state, day.templateId);
-    if (tpl) advanceCycle(state, tpl, day.dayKey, 'advanced', date, now);
+    if (tpl && !alreadyAdvanced) advanceCycle(state, tpl, day.dayKey, 'advanced', date, now);
     pushEvent(state, { date, type: 'completed', templateId: day.templateId, note: '训练日完成' }, now);
     return { ok: true, day };
   }
@@ -425,6 +457,7 @@
     const got = requireDay(state, date);
     if (!got.ok) return got;
     const day = got.day;
+    if (day.status === 'partial') return fail('这一天已经记了训练，要改成跳过请先重开');
     if (day.status === 'completed' || day.status === 'skipped') return fail('这一天已经收尾');
     day.resolution = { outcome: 'skipped', note: String(input.note || ''), cycleAdvanced: true, resolvedAt: (now || new Date()).toISOString() };
     day.status = 'skipped';
@@ -572,7 +605,7 @@
   function actionNameKey(name) {
     return String(name || '').trim().toLowerCase();
   }
-  function lastActual(state, actionName, beforeDate) {
+  function lastActual(state, actionName, beforeDate, confirmedOnly = false) {
     const key = actionNameKey(actionName);
     if (!key) return null;
     const dates = Object.keys(state.days).filter((d) => d < beforeDate).sort();
@@ -580,6 +613,12 @@
       const day = state.days[dates[i]];
       if (day.status === 'skipped') continue;
       const act = (day.actions || []).find((a) => actionNameKey(a.name) === key);
+      // Older start-only records used zero instead of null before any actual save.
+      if (confirmedOnly && act && (day.revision || 0) <= 1
+        && ['not-started', 'in-progress'].includes(day.status) && act.setsDone === 0
+        && !String(act.repsText || '').trim() && act.weightKg == null
+        && act.durationMinutes == null && !act.actualSource
+        && !(Array.isArray(act.sets) && act.sets.some((s) => s && s.done))) continue;
       if (act && (act.setsDone != null || act.weightKg != null || act.repsText
         || (Array.isArray(act.sets) && act.sets.some((s) => s && s.done)))) {
         return { date: dates[i], action: act };
@@ -1724,6 +1763,12 @@
       }
       cleaned[key] = arr.map((e) => ({ ...e, note: e.note ?? '' }));
     }
+    if(payload.adjustments!==undefined){
+      if(!Array.isArray(payload.adjustments)||payload.adjustments.length>50000)return fail('变化记录无效或数量过多');
+      const validSnapshot=x=>x&&typeof x==='object'&&(x.setsDone==null||isBoundedInt(x.setsDone,10000))&&typeof x.repsText==='string'&&x.repsText.length<=4000&&validateWeightKg(x.weightKg)&&(!x.sets||Array.isArray(x.sets)&&x.sets.length<=100&&x.sets.every(s=>s&&isBoundedInt(s.reps,999)&&validateWeightKg(s.weightKg)&&typeof s.done==='boolean'));
+      for(const x of payload.adjustments)if(!x||!importStr(x.id,1,128)||!isBusinessDate(x.date)||!importStr(x.name,1,200)||!importStr(x.actionKey,1,128)||!importStr(x.savedAt,1,40)||!Number.isFinite(Date.parse(x.savedAt))||!validSnapshot(x.before)||!validSnapshot(x.after))return fail('变化记录字段无效');
+      cleaned.adjustments=JSON.parse(JSON.stringify(payload.adjustments));
+    }
     return { ok: true, cleaned };
   }
   /* 校验通过后一次性应用：同 id 模板/同日期跳过，其余整体合并 */
@@ -1741,6 +1786,12 @@
     }
     state.events.push(...cleaned.events);
     state.progress.push(...cleaned.progress);
+    state.adjustments||=[];state.baselines||={};
+    for(const x of cleaned.adjustments||[]){
+      if(!state.adjustments.some(v=>v.id===x.id))state.adjustments.push(x);
+      const key=actionNameKey(x.name),previous=state.baselines[key];
+      if(!previous||previous.savedAt<x.savedAt)state.baselines[key]={...x.after,date:x.date,savedAt:x.savedAt};
+    }
     if (cleaned.bmiProfile) state.bmiProfile = cleaned.bmiProfile; // 身体档案随导入恢复
     return { ok: true, templates, days };
   }
@@ -2316,8 +2367,19 @@
         };
         for (const item of items) {
           if (!['add-weight', 'add-reps', 'add-sets'].includes(item.mode)) continue;
+          const action = day.actions.find((a) => a.actionKey === item.actionKey) || {};
+          const last = recentActuals(state, action.name || item.name, day.date, 1).map(progSessionMetrics)[0] || null;
           item.prevMode = item.mode; item.prevModeLabel = item.modeLabel;
           item.mode = 'hold'; item.modeLabel = '恢复优先';
+          item.deltaKg = 0; item.deltaPct = null;
+          if (last && last.load === 'bw') {
+            item.weightKg = null; item.bodyweight = true;
+            item.sets = action.plannedSets || last.sets;
+          } else if (last && typeof last.load === 'number') {
+            item.weightKg = last.load;
+            item.sets = action.plannedSets || last.sets;
+          }
+          if (last) item.repsText = action.plannedRepsText || (last.avg != null ? progFmt(last.avg) : item.repsText);
           item.reason = `【恢复优先】${recovery.reason}——睡眠剥夺下力量表现下降、主观疲劳感升高（Fullagar 2015），今天按计划重量巩固动作质量、不推进负荷；睡好再来，进步更稳。原建议：${item.reason}`;
         }
       }
@@ -2461,7 +2523,7 @@
     startTraining, pauseTraining, resumeTraining, saveTraining,
     finishAndAdvance, skipAndAdvance, resolveDay, reopenDay,
     recordProgressDecision,
-    todayPlan, dayRecord, lastActual, actionNameKey, progressDelta, volumeOf, statsSummary,
+    todayPlan, dayRecord, lastActual, trainingBaseline, actionNameKey, progressDelta, volumeOf, statsSummary,
     DEFAULT_WEEKLY_SET_TARGET, MUSCLE_DEFINITIONS,
     estimateE1rmKg, summarizeTrainingSet, inferMuscleWeights,
     ENDURANCE_CONFIG, estimateEnduranceReps, perSetRepsFromText, fatigueRetention,

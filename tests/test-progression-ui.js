@@ -25,9 +25,9 @@ globalThis.$$ = () => stubRows;
 
 function makeRow(idx, vals) {
   const els = {
-    setsDone: { value: String(vals.setsDone ?? '') },
-    repsText: { value: String(vals.repsText ?? '') },
-    weightKg: { value: String(vals.weightKg ?? '') }
+    setsDone: { value: String(vals.setsDone ?? ''), dataset: { orig: String(vals.setsDone ?? '') } },
+    repsText: { value: String(vals.repsText ?? ''), dataset: { orig: String(vals.repsText ?? '') } },
+    weightKg: { value: String(vals.weightKg ?? ''), dataset: { orig: String(vals.weightKg ?? '') } }
   };
   return {
     els,

@@ -121,6 +121,14 @@ test('女性公式：BMR 用 −161 常数（年龄缺省按 30 估算并在 not
   assert.equal(a.ageAssumed, true);
 });
 
+test('轻训练量文案：周组数 8 写 1.2 且不含「蛋白 1.6」；周组数 12 仍写 1.6', () => {
+  const light = Engine.nutritionAdvice(PROFILE, { weeklySets: 8 });
+  assert.ok(light.notes.some(n => n.includes('1.2')));
+  assert.ok(!light.notes.some(n => n.includes('蛋白 1.6')));
+  const trained = Engine.nutritionAdvice(PROFILE, { weeklySets: 12 });
+  assert.ok(trained.notes.some(n => n.includes('1.6')));
+});
+
 test('summarizeMealsToday：只按餐次时间汇总（N 次进食/首次/末次/跨度）', () => {
   const data = Engine.normalize({ meals: [
     { id: 'm1', local: '2026-09-17T08:10', at: '2026-09-17T00:10:00.000Z', kind: 'meal' },

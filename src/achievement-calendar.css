@@ -134,3 +134,26 @@
 .stat-box.ac-stat .icon3d { width:34px; height:34px; margin:0; }
 .stat-box.ac-stat b { font-size:20px; letter-spacing:-.3px; }
 .stat-box.ac-stat span { font-size:11px; }
+
+/* ================= 2026-09-29 修复：状态色优先于「今天」标记 ================= */
+/* 修复前：.ac-day.is-today（上 111 行）与 .ac-day.met/.partial 同为 (0,2,0) 且源序靠后，
+   今天达标格被紫底整体盖住；暗色下又被 dark.css 的 html.dark .ac-day (0,2,1) 抹平。
+   现把底色交还给状态类；「今天」由紫色描边（.is-today 的 border）、内侧光环与徽标承担。 */
+.ac-day.met.is-today { background:linear-gradient(160deg, rgba(214,240,228,.92), rgba(196,233,217,.78)); }
+.ac-day.met.is-today .ac-day-top b { color:#1f5e46; }
+.ac-day.partial.is-today { background:linear-gradient(160deg, rgba(236,231,252,.9), rgba(226,219,250,.76)); }
+/* 选中且是今天：选中外投影与「今天」内侧光环合并，光环不再被选中投影抹掉 */
+.ac-day.is-selected.is-today { box-shadow:0 4px 14px rgba(115,102,165,.22), inset 0 0 0 1px rgba(143,130,207,.35); }
+/* 暗色：html.dark 前缀 (0,3,1) 起步，压过 dark.css 的 html.dark .ac-day (0,2,1)。
+   is-today 须写在 met/partial 之前，今天达标/部分完成在同优先级下靠源序恢复状态底色。 */
+html.dark .ac-day.is-today { background:linear-gradient(160deg, rgba(70,62,112,.45), rgba(56,50,92,.4)); }
+html.dark .ac-day.is-today small { color:#b3a7f5; background:rgba(139,124,245,.22); }
+html.dark .ac-day.met { background:linear-gradient(160deg, rgba(45,94,74,.6), rgba(35,78,61,.5)); }
+html.dark .ac-day.met .ac-day-top b { color:#9ed9be; }
+html.dark .ac-day.met .ac-day-value { color:#8fd0b1; }
+html.dark .ac-day.partial { background:linear-gradient(160deg, rgba(76,66,124,.55), rgba(60,52,100,.45)); }
+html.dark .ac-day.partial .ac-day-top b { color:#c3baef; }
+html.dark .ac-day.partial .ac-day-value { color:#b0a5e8; }
+html.dark .ac-legend i.unrecorded { background:rgba(255,255,255,.08); }
+html.dark .ac-legend i.partial { background:#4c4279; }
+html.dark .ac-legend i.met { background:#3f7a61; }

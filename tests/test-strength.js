@@ -39,11 +39,11 @@ test('业务日期按本地时区归日（与全应用口径一致；UTC+8 下�
 test('normalize 幂等初始化，兼容旧数据', () => {
   const db = {};
   const s = Core.normalize(db);
-  assert.deepEqual(Object.keys(s).sort(), ['cycle', 'days', 'events', 'progress', 'templates']);
+  assert.deepEqual(Object.keys(s).sort(), ['adjustments', 'baselines', 'cycle', 'days', 'events', 'progress', 'templates']);
   const old = { templates: [{ id: 't1' }], junk: 1 };
   const s2 = Core.normalize({ strength: old });
   assert.equal(s2.templates.length, 1);
-  assert.deepEqual(Object.keys(s2).sort(), ['cycle', 'days', 'events', 'progress', 'templates']);
+  assert.deepEqual(Object.keys(s2).sort(), ['adjustments', 'baselines', 'cycle', 'days', 'events', 'progress', 'templates']);
 });
 
 test('normalize 保留 bmiProfile（修复跨页面渲染抹除身体档案），垃圾键仍不收', () => {
@@ -444,4 +444,78 @@ test('只填负重没填组数次数：不生成观测记录（留空记 0 后�
   assert.equal(obs.length, 1);
   assert.equal(obs[0].weightText, '自重');
   assert.equal(obs[0].sets, 4);
+});
+
+test('未声明汇总替换时，不同的汇总数字不会删掉逐组；声明后才删', () => {
+  const state = Core.normalize({});
+  pushPlan(state, [{ dayKey: 'd1', name: '推日', actions: [{ name: '卧推', plannedSets: 3, plannedRepsText: '10' }] }], NOW);
+  Core.startTraining(state, { date: '2026-09-12' }, NOW);
+  const sets = [
+    { reps: 10, weightKg: 60, done: true },
+    { reps: 8, weightKg: 60, done: true }
+  ];
+  assert.ok(Core.saveTraining(state, { date: '2026-09-12', actions: [{ actionKey: 'act-1-1', sets }] }, NOW).ok);
+  const quiet = Core.saveTraining(state, {
+    date: '2026-09-12',
+    actions: [{ actionKey: 'act-1-1', setsDone: 1, repsText: '5', weightKg: 40 }]
+  }, NOW);
+  assert.ok(quiet.ok, quiet.error);
+  assert.deepEqual(state.days['2026-09-12'].actions[0].sets, sets);
+  const edited = Core.saveTraining(state, {
+    date: '2026-09-12',
+    actions: [{ actionKey: 'act-1-1', setsDone: 2, repsText: '6', weightKg: 50, summaryEdited: true }]
+  }, NOW);
+  assert.ok(edited.ok, edited.error);
+  assert.equal(state.days['2026-09-12'].actions[0].sets, undefined);
+  assert.equal(state.days['2026-09-12'].actions[0].setsDone, 2);
+});
+
+test('partial 不能改成跳过；再次完成不再次轮转', () => {
+  const state = Core.normalize({});
+  const tpl = pushPlan(state, planInput().days, NOW);
+  Core.startTraining(state, { date: '2026-09-12' }, NOW);
+  Core.saveTraining(state, { date: '2026-09-12', actions: [{ actionKey: 'act-1-1', setsDone: 1, repsText: '8' }] }, NOW);
+  const first = Core.finishAndAdvance(state, { date: '2026-09-12' }, NOW);
+  assert.ok(first.ok, first.error);
+  assert.equal(first.day.status, 'partial');
+  const pointer = state.cycle[tpl.id].currentDayKey;
+  const again = Core.finishAndAdvance(state, { date: '2026-09-12' }, NOW);
+  assert.ok(again.ok, again.error);
+  assert.equal(state.cycle[tpl.id].currentDayKey, pointer);
+  const skip = Core.skipAndAdvance(state, { date: '2026-09-12', note: '改主意' }, NOW);
+  assert.equal(skip.ok, false);
+  assert.equal(Core.dayRecord(state, '2026-09-12').status, 'partial');
+  assert.equal(state.cycle[tpl.id].currentDayKey, pointer);
+});
+
+test('replaceTemplate：缺少 cycle 时先补指针，不抛错', () => {
+  const state = Core.normalize({});
+  const tpl = pushPlan(state, planInput().days, NOW);
+  delete state.cycle[tpl.id];
+  const before = tpl.versions.length;
+  const r = Core.replaceTemplate(state, {
+    id: tpl.id, name: tpl.name, changeNote: '补指针', days: planInput().days
+  }, NOW);
+  assert.equal(r.ok, true, r.error);
+  assert.equal(r.template.versions.length, before + 1);
+  assert.equal(state.cycle[tpl.id].currentDayKey, 'push');
+});
+
+test('恢复优先会退回上次重量，不再留下加重后的数字', () => {
+  const state = Core.normalize({});
+  pushPlan(state, [{ dayKey: 'd1', name: '推日', actions: [{ name: '卧推', plannedSets: 3, plannedRepsText: '8-12', plannedWeightText: '60kg' }] }], NOW);
+  Core.startTraining(state, { date: '2026-09-08' }, NOW);
+  Core.saveTraining(state, { date: '2026-09-08', actions: [{ actionKey: 'act-1-1', setsDone: 3, repsText: '12+12+12', weightKg: 60 }] }, NOW);
+  Core.finishAndAdvance(state, { date: '2026-09-08' }, NOW);
+  Core.startTraining(state, { date: '2026-09-10' }, NOW);
+  Core.saveTraining(state, { date: '2026-09-10', actions: [{ actionKey: 'act-1-1', setsDone: 3, repsText: '12+12+12', weightKg: 60 }] }, NOW);
+  const day = { date: '2026-09-12', actions: [{ actionKey: 'act-1-1', name: '卧推', plannedSets: 3, plannedRepsText: '8-12', plannedWeightText: '60kg' }] };
+  const base = Core.nextSessionAdvice(state, day);
+  const sleepy = Core.nextSessionAdvice(state, day, { recovery: { sleepMinutesLastNight: 300 } });
+  assert.equal(base.items[0].mode, 'add-weight');
+  assert.notEqual(base.items[0].weightKg, 60);
+  assert.equal(sleepy.items[0].mode, 'hold');
+  assert.equal(sleepy.items[0].weightKg, 60);
+  assert.equal(sleepy.items[0].deltaKg, 0);
+  assert.equal(sleepy.items[0].repsText, '8-12');
 });
