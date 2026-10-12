@@ -4,7 +4,7 @@ const fs = require('node:fs'), path = require('node:path'), crypto = require('no
 const PhotoLib = require('./photo-library');
 const hash = b => crypto.createHash('sha256').update(b).digest('hex');
 const MAX_BYTES = 512 * 1024 * 1024;
-const MEDIA_NAMES = ['skin-photos', 'body-photos', 'meal-photos', 'imported-videos'];
+const MEDIA_NAMES = ['skin-photos', 'body-photos', 'meal-photos', 'imported-videos','life-videos'];
 function cleanData(input) {
   const db = JSON.parse(JSON.stringify(input));
   for (const key of Object.keys(db.settings || {})) if (/apikey|secret|token|encrypted/i.test(key)) delete db.settings[key];
@@ -16,7 +16,8 @@ function mediaDirs(dir, opts={}) {
     'skin-photos': opts.skinDir || opts.photoDir || path.join(dir, 'skin-photos'),
     'body-photos': opts.bodyDir || path.join(dir, 'body-photos'),
     'meal-photos': opts.mealDir || path.join(dir, 'meal-photos'),
-    'imported-videos': opts.videoDir || path.join(dir, 'imported-videos')
+    'imported-videos': opts.videoDir || path.join(dir, 'imported-videos'),
+    'life-videos':opts.lifeVideoDir || path.join(dir,'life-videos')
   };
 }
 function createBundle(db, dir, includeVideos=false, opts={}) {
@@ -29,7 +30,7 @@ function createBundle(db, dir, includeVideos=false, opts={}) {
     if(total>MAX_BYTES)throw Error('照片和视频合计超过 512 MB，请改用仅保存视频引用');
     const bytes=fs.readFileSync(file);files.push({path:name,bytes:size,sha256:hash(bytes),data:bytes.toString('base64')});
   }
-  for(const p of [...(data.skin?.photos || []),...(data.rhythm?.mealPhotos || [])]) {
+  for(const p of [...(data.skin?.photos || []),...(data.rhythm?.mealPhotos || []),...(data.mediaTrash || []).filter(t=>t.type==='photo').map(t=>t.record)]) {
     if(!PhotoLib.safePhotoName(p.file || '')) throw Error('照片文件名无效');
     const archive = PhotoLib.archiveForPhoto(p.kind)+'/'+p.file;
     if(files.some(f=>f.path===archive)) continue;
@@ -40,6 +41,12 @@ function createBundle(db, dir, includeVideos=false, opts={}) {
     if(!includeVideos){if(!v.localPath||!fs.existsSync(v.localPath))missing.push('视频引用：'+(v.title||v.id));continue;}
     const name='imported-videos/'+hash(Buffer.from(v.id)).slice(0,16)+path.extname(v.localPath).toLowerCase();
     add(v.localPath,name);if(files.some(f=>f.path===name)) {v.backupVideo=name;delete v.localPath;}
+  }
+  for(const v of [...(data.lifeVideos || []),...(data.mediaTrash || []).filter(t=>t.type==='video').map(t=>t.record)]){
+    if(!PhotoLib.safeVideoName(v.file) || v.file!==PhotoLib.safeVideoName(v.file))throw Error('生活视频文件名无效');
+    const original=path.join(dirs['life-videos'],v.file),name='life-videos/'+v.file;
+    if(includeVideos){if(!files.some(f=>f.path===name))add(original,name);}
+    else missing.push('未打包生活视频原文件：'+v.file);
   }
   return {format:'face-reshape-portable',version:1,createdAt:new Date().toISOString(),includeVideos,missing,data,files};
 }
@@ -62,7 +69,7 @@ function summary(b) {return {version:b.version,date:b.createdAt,photos:b.files.f
 function destFor(dir, name, dests) {
   if (name === 'face-reshape-data.json') return path.join(dir, name);
   if (dests && dests[name]) {
-    const kind = name === 'body-photos' ? 'body' : name === 'meal-photos' ? 'meal' : name === 'imported-videos' ? 'video' : 'skin';
+    const kind = name === 'body-photos' ? 'body' : name === 'meal-photos' ? 'meal' : name === 'imported-videos' ? 'video' : name==='life-videos'?'lifevideo':'skin';
     return PhotoLib.assertMediaDest(dir, dests[name], kind);
   }
   return path.join(dir, name);

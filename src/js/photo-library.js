@@ -9,6 +9,8 @@ const KINDS = {
   body: { project: '健身照片', isolated: 'body-photos', archive: 'body-photos' },
   meal: { project: '饮食照片', isolated: 'meal-photos', archive: 'meal-photos' },
   video: { project: '跟练视频', isolated: 'imported-videos', archive: 'imported-videos' }
+  ,lifevideo: { project: '生活视频', isolated: 'life-videos', archive: 'life-videos' }
+  ,skinvideo: { project: '护肤视频', isolated: 'skincare-videos', archive: 'skincare-videos' }
 };
 const PHOTO_SUBFOLDER = KINDS.skin.project;
 const ANGLE = { front: '正面', left: '左侧', right: '右侧' };
@@ -17,7 +19,7 @@ const VIDEO_EXTS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.mkv', '.avi']);
 const VIDEO_COPY_LIMIT = 2 * 1024 * 1024 * 1024;
 
 function mediaKind(kind) {
-  if (kind === 'body' || kind === 'video' || kind === 'meal') return kind;
+  if (kind === 'body' || kind === 'video' || kind === 'meal' || kind === 'lifevideo' || kind === 'skinvideo') return kind;
   return 'skin';
 }
 
@@ -45,7 +47,7 @@ function isBundleRelPath(p) {
   const parts = String(p || '').split('/');
   if (parts.length !== 2) return false;
   if (['skin-photos','body-photos','meal-photos'].includes(parts[0])) return !!safePhotoName(parts[1]);
-  return parts[0] === 'imported-videos' && !!safeVideoName(parts[1]);
+  return ['imported-videos','life-videos'].includes(parts[0]) && !!safeVideoName(parts[1]);
 }
 
 function suggestedName({ date, kind, angle, ext, used } = {}) {

@@ -5,17 +5,22 @@ const Rhythm = {
   icon(name) { return Icon3D.makeIcon(name).outerHTML; },
   mealPhotosHtml(day) {
     const photos=(this.data().mealPhotos || []).filter(p=>p.date===day).sort((a,b)=>a.local.localeCompare(b.local));
-    if(!photos.length)return '<p class="rhythm-caption">微信发餐食照片后，原图会出现在这里。</p>';
-    return `<div class="rhythm-photo-heading"><h4>餐食照片 · ${photos.length} 张</h4><small>点开查看原图</small></div><div class="life-photo-grid">${photos.map(p=>{
+    const labels=['早餐','午餐','晚餐'];
+    const missing=labels.filter(label=>!photos.some(p=>p.mealLabel===label));
+    const status=`<p class="rhythm-caption">${photos.length} 张原图 · ${missing.length?'尚未记录 '+missing.join('、'):'三餐照片已记录'}（仅提示，不补造照片；加餐、多图均可）。</p>`;
+    const media=typeof MediaActions!=='undefined' ? MediaActions.videosHtml('meal',day)+MediaActions.trashHtml('meal',day) : '';
+    if(!photos.length)return status+'<p class="rhythm-caption">微信说用餐时间与餐别，再发照片或视频；不知道用餐时间时先待确认。</p>'+media;
+    return status+`<div class="rhythm-photo-heading"><h4>餐食照片 · ${photos.length} 张</h4><small>点开查看原图</small></div><div class="life-photo-grid">${photos.map(p=>{
       const meal=this.data().meals.find(m=>m.sourceKey===p.mealSourceKey);
-      return `<button type="button" class="life-photo-thumb" data-meal-photo="${esc(p.id)}"><img data-photo-file="${esc(p.file)}" data-photo-kind="meal" alt="${esc(p.date)} 餐食照片"><span>${esc(p.local.slice(11))}${p.timeKind==='sent'?' · 发送时间':''}</span><small>${meal?'关联 '+esc(meal.local.slice(11))+' '+esc(meal.foodText || '餐食'):'餐食时间待补充'}</small></button>`;
-    }).join('')}</div>`;
+      return `<button type="button" class="life-photo-thumb" data-meal-photo="${esc(p.id)}"><img data-photo-file="${esc(p.file)}" data-photo-kind="meal" alt="${esc(p.date)} ${esc(p.mealLabel || '餐食照片')}"><span>${esc(p.mealLabel || '餐别待确认')} · ${esc(p.local.slice(11))}${p.timeKind==='sent'?' · 发送时间':''}</span><small>${meal?'关联 '+esc(meal.local.slice(11))+' '+esc(meal.foodText || '餐食'):'餐食时间待补充'}</small></button>`;
+    }).join('')}</div>`+media;
   },
   mealPhotoViewer(id) {
     const p=(this.data().mealPhotos || []).find(p=>p.id===id);
     if(!p)return;
-    const card=openModal(`<h3>餐食照片 · ${esc(p.date)}</h3><p class="hint">${p.timeKind==='occurred'?'记录时间':'照片发送时间'}：${esc(p.local.replace('T',' '))} · 北京时间</p><p class="hint">原始发送：${esc(p.sentAt || '')}${p.note ? ' · '+esc(p.note) : ''}</p><div class="life-photo-viewer"><img data-photo-file="${esc(p.file)}" data-photo-kind="meal" alt="餐食原图"></div><button class="btn" id="rh-photo-close">关闭</button>`);
+    const card=openModal(`<h3>${esc(p.mealLabel || '餐食照片')} · ${esc(p.date)}</h3><p class="hint">${p.timeKind==='occurred'?'记录时间':'照片发送时间'}：${esc(p.local.replace('T',' '))} · 北京时间</p><p class="hint">原始发送：${esc(p.sentAt || '')}${p.note ? ' · '+esc(p.note) : ''}</p>${p.archiveRelativePath?`<p class="hint">本地归档：${esc(p.archiveRelativePath)}</p>`:''}<div class="life-photo-viewer"><img data-photo-file="${esc(p.file)}" data-photo-kind="meal" alt="餐食原图"></div><button class="btn" id="rh-photo-close">关闭</button>`);
     $('#rh-photo-close',card).onclick=closeModal;
+    const remove=document.createElement('button');remove.className='btn danger';remove.textContent='删除照片';remove.onclick=()=>MediaActions.change(p.id,'photo','delete');card.append(remove);
     Skincare._loadPhotoImgs(card).then(missing=>{if(missing)toast('原图暂时无法读取，请检查照片文件','red');});
   },
   /* ---------- 睡眠质量体系（移植自个人积累库） ---------- */
@@ -215,13 +220,14 @@ const Rhythm = {
     root.innerHTML = `<div class="rhythm-page">
       <div class="rhythm-intro"><div><div class="rhythm-eyebrow">饮食 · 睡眠 · 日常节律</div><h1>吃饭与睡觉，记个大概就好。</h1><p>记下时间，慢慢了解自己的生活节奏。</p></div>${this.icon('nutrition')}</div>
       <div class="rhythm-actions">
+        <button class="btn primary" id="rh-diet-entry">饮食 · 三餐照片</button>
         <button class="btn primary" id="rh-meal">${this.icon('nutrition')}记一餐</button>
         <span class="rhythm-local">大致到分钟即可 · 保存在本机</span>
       </div>
       <section class="rhythm-card rhythm-journal" aria-labelledby="rh-journal-title">
         <div class="rhythm-heading"><h2 id="rh-journal-title">日常记录</h2><div class="rhythm-date"><button class="btn small ghost" id="rh-prev" aria-label="前一天">前一天</button><input id="rh-date" type="date" min="2000-01-01" max="${todayKey()}" value="${selected}" aria-label="查看记录日期"><button class="btn small ghost" id="rh-today">今天</button></div></div>
         <div class="rhythm-log-columns">
-          <div><h3>${this.icon('nutrition')}进餐时间</h3><p class="rhythm-caption">记吃完的大致时间，餐别按时间自动归类，可以改。</p>
+          <div id="rh-diet-journal"><h3>${this.icon('nutrition')}饮食记录与三餐照片</h3><p class="rhythm-caption">微信原文、实际用餐时间与原图一起积累；餐别可按你明确说的名称记录。</p>
             <div class="rhythm-records">${meals.length ? meals.map(m => { const chip = this.mealChip(m); return `<div class="rhythm-record rhythm-record-meal"><div class="rhythm-record-main"><strong>${esc(m.local.slice(11))}</strong><span class="rhythm-meal-chip" data-kind="${esc(chip.kind)}">${esc(chip.text)}</span>${m.foodText ? `<span>${esc(m.foodText)}</span>` : ''}${m.photoCount ? `<small>📷 ${m.photoCount} 张已归档在生活日报</small>` : ''}${m.source === 'weixin-life-diary' ? '<small>来自微信生活日报</small>' : ''}</div><button class="btn small ghost" data-meal="${esc(m.id)}" aria-label="编辑 ${esc(m.local.slice(11))} 进餐">编辑</button></div>`; }).join('') : '<p class="rhythm-empty">这一天还没有进餐记录。</p>'}</div>
             ${this.mealPhotosHtml(selected)}
             <label class="rhythm-check"><input id="rh-complete-meals" type="checkbox" ${d.completeDays[selected]?.meals ? 'checked' : ''}>这一天的进餐已记全</label>
@@ -302,6 +308,7 @@ const Rhythm = {
     });
     $$('[data-meal]', root).forEach(b => { b.onclick = () => this.mealModal(b.dataset.meal); });
     $$('[data-meal-photo]',root).forEach(b=>{b.onclick=()=>this.mealPhotoViewer(b.dataset.mealPhoto);});
+    $('#rh-diet-entry',root).onclick=()=>{$('#rh-diet-journal',root).scrollIntoView({behavior:'smooth',block:'start'});};
     if(typeof Skincare!=='undefined')void Skincare._loadPhotoImgs(root);
     $$('[data-sleep]', root).forEach(b => { b.onclick = () => { const entry = d.sleeps.find(s => s.id === b.dataset.sleep); this.selectedDay = (entry.endLocal || entry.startLocal).slice(0, 10); this.sleepEditId = entry.id; this.refresh(); $('#rh-sleep-form [name=hours]').focus(); }; });
     $$('[data-day]', root).forEach(b => { b.onclick = () => { this.selectedDay = b.dataset.day; this.sleepEditId = undefined; this.refresh(); root.scrollTop = 0; }; });

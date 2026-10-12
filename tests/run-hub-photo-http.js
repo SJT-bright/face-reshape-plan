@@ -1,6 +1,6 @@
 // Actual Electron HTTP, original files, renderer Store and visible image decoding.
 const assert=require('node:assert/strict');
-const {spawn}=require('node:child_process');
+const {spawn,execFileSync}=require('node:child_process');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),http=require('node:http'),net=require('node:net'),crypto=require('node:crypto');
 const {chromium}=require('playwright-core');
 const root=path.resolve(__dirname,'..'),profile=fs.mkdtempSync(path.join(os.tmpdir(),'hub-photo-http-'));
@@ -26,6 +26,8 @@ async function start(port,debugPort){
   }
   if(!browser)throw new Error('Electron readiness timeout: '+output.slice(-1000));
   const context=browser.contexts()[0];const page=context.pages().find(p=>p.url().includes('src/index.html')) || await context.waitForEvent('page',{timeout:10000});
+  page.on('pageerror',error=>console.error('Isolated renderer error:',error.message));
+  page.on('console',message=>{if(message.type()==='error')console.error('Isolated renderer console:',message.text());});
   await page.waitForFunction(()=>typeof Store!=='undefined' && Store.db && window.HubActions,{},{timeout:12000});
   return page;
 }
@@ -35,6 +37,11 @@ async function stop(){
   const running=child;running.kill('SIGTERM');
   await Promise.race([new Promise(resolve=>running.once('exit',resolve)),delay(8000).then(()=>{throw new Error('Electron did not stop normally');})]);
   child=undefined;
+}
+async function screenshotReady(page,file){
+  // Decoded images can exist while the entry animation still hides the page.
+  await page.evaluate(async()=>{const root=document.querySelector('#view-root');if(root)await Promise.all(root.getAnimations({subtree:true}).filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));});
+  await page.screenshot({path:file,fullPage:true});
 }
 async function main(){
   const port=await freePort(),debugPort=await freePort();
@@ -64,7 +71,7 @@ async function main(){
       else{Strength.ui.date=day;Strength.ui.tab='today';App.go('strength');}
     },{kind,day});
     await page.waitForFunction(kind=>[...document.querySelectorAll(`img[data-photo-kind="${kind}"]`)].some(img=>img.complete && img.naturalWidth>0),kind,{timeout:10000});
-    if(evidence)await page.screenshot({path:path.join(evidence,`${kind}.png`),fullPage:true});
+    if(evidence)await screenshotReady(page,path.join(evidence,`${kind}.png`));
   }
   await stop();page=await start(port,debugPort);
   for(const [index,kind] of ['meal','skin','body'].entries()){
@@ -100,6 +107,47 @@ async function main(){
   assert.equal((await request(port,'POST','/hub/photo',deletedReplay,token)).status,409);
   assert.equal(fs.existsSync(deletedFile),false,'a rejected replay must not restore a manually deleted original file');
   console.log('PASS manual deletion: replay 409 preserves deletion of both record and physical file');
+  // Real active-plan setup in an isolated profile, not a matcher mock.
+  await page.evaluate(()=>{
+    const state=Core.normalize(Store.db);
+    const result=Core.replaceTemplate(state,{id:'bridge-plan',name:'练三腹一',days:[
+      {dayKey:'chest-triceps',name:'第一天 · 胸＋三头',actions:[{name:'哑铃卧推',plannedSets:3}]},
+      {dayKey:'back-biceps',name:'第二天 · 背＋二头＋小臂',actions:[{name:'哑铃弯举',plannedSets:3}]}]});
+    if(!result.ok)throw new Error(result.error);Store.save(true);
+  });
+  const strengthBefore=await page.evaluate(()=>JSON.stringify(Store.db.strength));
+  fs.writeFileSync(path.join(profile,'bridge-original.png'),PNG);
+  const diary=process.env.LIFE_DIARY_TEST_ROOT;
+  if(!diary)throw new Error('LIFE_DIARY_TEST_ROOT is required for the actual Python/HTTP bridge acceptance');
+  const bridgeOutput=execFileSync(path.join(diary,'.venv/bin/python'),[path.join(diary,'scripts/test_training_bridge.py'),'--profile',profile,'--port',String(port)],{env:{...process.env,PYTHONPATH:path.join(diary,'src')},encoding:'utf8',timeout:30000});
+  console.log(bridgeOutput.trim());
+  assert.equal(await page.evaluate(()=>JSON.stringify(Store.db.strength)),strengthBefore,'WeChat workout import must preserve plan/progress/cycle');
+  const workout=await page.evaluate(()=>Object.values(Store.db.workoutImports)[0]);
+  assert.equal(workout.description,'三头和胸');assert.equal(workout.match.dayKey,'chest-triceps');
+  await page.evaluate(date=>{closeModal();Strength.ui.date=date;Strength.ui.tab='today';App.go('strength');},workout.date);
+  await page.waitForFunction(()=>document.querySelector('[data-workout-source]')?.textContent.includes('胸＋三头'),{},{timeout:10000}).catch(async error=>{console.error('Isolated strength view:',await page.locator('#view-root').innerText());throw error;});
+  const linked=await page.evaluate(key=>Store.db.skin.photos.find(p=>p.trainingSourceKey===key),workout.sourceKey);
+  assert.ok(linked);assert.equal(linked.date,workout.date);
+  await page.locator(`[data-body-photo="${linked.id}"]`).click();
+  await page.waitForFunction(()=>document.querySelector('.sk-viewer-img img')?.naturalWidth>0);
+  if(evidence)await screenshotReady(page,path.join(evidence,'training-plan-photo.png'));
+  await page.evaluate(()=>closeModal());
+  await page.evaluate(day=>{Rhythm.selectedDay=day;App.go('nutrition');},day);
+  await page.locator('#rh-diet-entry').click();
+  assert.ok((await page.locator('#rh-diet-journal').innerText()).includes('午餐'));
+  const named=path.join(profile,'饮食',day.split('-').map(Number).reduce((out,value,index)=>out+(index===0?value+'年':index===1?value+'月':value+'日'),''));
+  assert.ok(fs.readdirSync(named).some(name=>name.includes('午餐')));
+  assert.deepEqual(fs.readFileSync(path.join(named,fs.readdirSync(named).find(name=>name.includes('午餐')))),PNG);
+  if(evidence)await screenshotReady(page,path.join(evidence,'diet-entry.png'));
+  console.log('PASS actual App: WeChat workout text/plan/photo visible, progress unchanged, diet entrance clickable, date/meal named original bytes exact');
+  // Produce a visible timestamp fixture through the actual renderer, then the
+  // local Vision reader must transcribe it without inventing a meal fact.
+  await page.evaluate(()=>{const e=document.createElement('div');e.id='timestamp-fixture';e.style.cssText='background:white;color:black;font:36px Arial;padding:30px;width:760px';e.textContent='2026-05-20 12:20';document.body.append(e);});
+  const fixture=path.join(profile,'visible-time.png');await page.locator('#timestamp-fixture').screenshot({path:fixture});
+  await page.evaluate(()=>document.querySelector('#timestamp-fixture').remove());
+  const timeOutput=execFileSync(path.join(diary,'.venv/bin/python'),['-c','import sys,json;from feishu_life_diary.photo_time import candidates;print(json.dumps(candidates(sys.argv[1])))',fixture],{env:{...process.env,PYTHONPATH:path.join(diary,'src')},encoding:'utf8',timeout:10000});
+  assert.ok(JSON.parse(timeOutput).some(item=>item.text.includes('2026-05-20') && item.text.includes('12:20')));
+  console.log('PASS image timestamp: real renderer PNG → local Vision recognizes original date/time; still requires owner confirmation before recording meal time');
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{
   try{await stop();}catch(e){console.error(e);process.exitCode=1;}

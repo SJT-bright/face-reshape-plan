@@ -20,6 +20,8 @@ test('resolveMediaDir：皮肤 / 健身 / 跟练视频三分开', () => {
   assert.equal(P.resolveMediaDir({ isolated: false, dataDir: '/tmp/p', projectRoot: root, kind: 'video' }), path.join(root, '跟练视频'));
   assert.equal(P.resolveMediaDir({ isolated: true, dataDir: '/tmp/p', projectRoot: root, kind: 'body' }), path.join('/tmp/p', 'body-photos'));
   assert.equal(P.resolveMediaDir({ isolated: true, dataDir: '/tmp/p', projectRoot: root, kind: 'video' }), path.join('/tmp/p', 'imported-videos'));
+  assert.equal(P.resolveMediaDir({ isolated: false, dataDir: '/tmp/p', projectRoot: root, kind: 'skinvideo' }), path.join(root, '护肤视频'));
+  assert.equal(P.resolveMediaDir({ isolated: true, dataDir: '/tmp/p', projectRoot: root, kind: 'skinvideo' }), path.join('/tmp/p', 'skincare-videos'));
 });
 
 test('resolveProjectRoot：源码运行用工程根；打包后优先 Downloads 里的同名工程', () => {

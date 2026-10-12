@@ -98,11 +98,17 @@ const UX = {
     };
   },
   awakening(){
-    $$('[data-watch-period]').forEach(b=>b.onclick=()=>{this.watchManualPhase=b.dataset.watchPeriod;this.updateWatchingNow();});
+    $$('[data-watch-period]').forEach(b=>b.onclick=()=>{this.watchManualPhase=b.dataset.watchPeriod;App.render();});
     $('#watch-plan-settings')?.addEventListener('click',()=>{this.settingsPanel='reminders';App.go('settings');});
     this.updateWatchingNow();
     const root=$('#view-root'),box=$('#ux-home-video',root);if(box)this.homeVideo(box);
-    const library=$('#td-vids',root)?.closest('.card');if(library)this.videoLibrary(library);
+    const library=$('#td-vids',root)?.closest('.card');
+    if(library&&!library.closest('#ux-library-panel')){
+      const d=document.createElement('details');d.id='ux-library-panel';d.open=true;
+      d.innerHTML='<summary>视频库 · 搜索、收藏与最近使用</summary>';
+      library.before(d);d.appendChild(library);
+    }
+    if(library)this.videoLibrary(library);
   },
   updateWatchingNow(){
     if(App.currentView!=='awakening'||!Store.db)return;
@@ -113,6 +119,7 @@ const UX = {
     const shown=this.watchManualPhase||phase;
     $$('[data-watch-period]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.watchPeriod===shown)));
     const label=$('#watch-current-period');if(label)label.textContent=(plan.morning||plan.evening)?`当前：${shown==='morning'?'早上':'晚上'} · 到点自动切换`:'设置早晚开始时间后，到点自动切换时段';
+    this.watchPhase=shown;
   },
   watchingSettingsFields(){
     return Store.collections().filter(c=>c.id!=='face').map(c=>{const plan=DailyPlanCore.config(Store.db,c.id);return `<fieldset class="watch-plan-fields" data-watch-plan="${esc(c.id)}"><legend>${esc(c.name)}</legend><label>每日观看时长<span class="watch-duration"><input class="input" data-watch-field="targetMinutes" data-stepper="观看时长" type="number" min="1" max="600" value="${plan.targetMinutes}">分钟</span></label><label>早上开始<input class="input" type="time" data-watch-field="morning" value="${esc(plan.morning)}"></label><label>晚上开始<input class="input" type="time" data-watch-field="evening" value="${esc(plan.evening)}"></label></fieldset>`;}).join('');
@@ -226,10 +233,84 @@ const UX = {
     this.homeVideoChoices[mode]={date:todayKey(),id};
     this.homeVideoChoice=this.homeVideoChoices[mode];
   },
+  _posterJobs: new Map(),
+  /* 本地文件（含已下载的抖音）没有封面时，用视频第 0 秒的第一帧。已有封面不覆盖。 */
+  ensureLocalPoster(video, box) {
+    if (!video || video.source !== 'local' || !video.localPath || typeof native === 'undefined' || !native.videoPoster) return;
+    const img = $('.ux-home-video-poster', box);
+    if (video.pic) {
+      if (video.posterFromFrame && img) img.addEventListener('error', () => this.recoverLocalPoster(video, box, img), { once: true });
+      return;
+    }
+    this.requestLocalPoster(video, box);
+  },
+  recoverLocalPoster(video, box, img) {
+    if (!String(img.currentSrc || img.src || '').startsWith('file:')) return;
+    const current = Store.videoById(video.id);
+    if (!current?.posterFromFrame || current.localPath !== video.localPath) return;
+    current.pic = '';
+    current.posterFromFrame = false;
+    this.requestLocalPoster(current, box);
+  },
+  requestLocalPoster(video, box) {
+    const key = video.id + '\0' + video.localPath;
+    if (this._posterJobs.has(key)) return;
+    const job = Promise.resolve(native.videoPoster(video.localPath)).then(url => {
+      if (!url) return;
+      const current = Store.videoById(video.id);
+      if (!current || current.localPath !== video.localPath || current.pic) return;
+      current.pic = url;
+      current.posterFromFrame = true;
+      Store.save(true);
+      this.paintLocalPoster(current, box, url);
+    }).catch(() => {}).finally(() => this._posterJobs.delete(key));
+    this._posterJobs.set(key, job);
+  },
+  paintLocalPoster(video, box, url) {
+    const card = $('#ux-home-video-play', box);
+    if (card?.isConnected && card.dataset.posterFor === video.id) {
+      const cover = $('.ux-home-video-cover', card);
+      let img = $('.ux-home-video-poster', cover);
+      if (!img) {
+        img = document.createElement('img');
+        img.className = 'ux-home-video-poster';
+        img.alt = '';
+        img.draggable = false;
+        cover.appendChild(img);
+      }
+      img.classList.remove('ph');
+      img.src = url;
+    }
+    const placeholder = document.querySelector(`.vid-card[data-video="${CSS.escape(video.id)}"] .vid-cover.ph`);
+    if (placeholder) {
+      const img = document.createElement('img');
+      img.className = 'vid-cover';
+      img.alt = '';
+      img.referrerPolicy = 'no-referrer';
+      img.src = url;
+      placeholder.replaceWith(img);
+    }
+    const panel = document.querySelector('#ux-home-video-menu .ux-home-video-preview');
+    if (panel?.dataset.previewId === video.id) {
+      const cover = $('.ux-home-video-preview-cover', panel);
+      let img = $('img', cover);
+      if (!img) {
+        img = document.createElement('img');
+        img.alt = '';
+        img.draggable = false;
+        cover.prepend(img);
+      }
+      img.src = url;
+      const empty = $('.ux-home-video-preview-empty', panel);
+      if (empty) empty.hidden = true;
+    }
+  },
   homeVideo(box){
     this._homeVideoMenuAbort?.abort();
     const mode=Store.currentMode(),watching=mode!=='face';
-    const periodSlot=['morning','evening'].includes(this.facePeriod)?this.facePeriod:null;
+    const periodSlot=watching
+      ? (['morning','evening'].includes(this.watchPhase)?this.watchPhase:'morning')
+      : (['morning','evening'].includes(this.facePeriod)?this.facePeriod:null);
     const videos=Store.videosForMode(mode),active=Session.active&&Store.videoMode(Store.videoById(Session.active.videoId))===mode?Session.active:null;
     const plans=(watching?[]:Store.db.sessions||[]).filter(s=>s.enabled&&(!this.facePeriod||this.facePeriod==='all'||(minutesOf(s.time)<12*60?'morning':'evening')===this.facePeriod)&&(s.days||[]).includes(new Date().getDay())&&Store.videoById(s.videoId)&&Store.videoMode(Store.videoById(s.videoId))===mode)
       .sort((a,b)=>(minutesOf(a.time)||0)-(minutesOf(b.time)||0));
@@ -242,7 +323,9 @@ const UX = {
     const chosen=!periodSlot&&candidate&&Store.videoMode(candidate)===mode?candidate:null;
     const auto=periodSlot?Store.videoById((typeof Routine!=='undefined'?Routine.config():{})[periodSlot]?.videoId):null;
     const autoVideo=auto&&Store.videoMode(auto)===mode?auto:null;
-    let video=Store.videoById(active?.videoId)||slotVideo||chosen||autoVideo||Store.videoById(planned?.videoId)||recent[0];
+    const pins=watching&&typeof FixedPracticeCore!=='undefined'?FixedPracticeCore.pins(Store.db,mode,periodSlot):[];
+    const pinned=pins.map(id=>Store.videoById(id)).find(v=>v&&Store.videoMode(v)===mode)||null;
+    let video=Store.videoById(active?.videoId)||slotVideo||(watching?pinned:(chosen||autoVideo||Store.videoById(planned?.videoId)))||recent[0];
     box.innerHTML=`<div class="ux-home-video-heading"><span>${watching?'视频观看':'视频跟练'}</span>${videos.length>1?`<div class="ux-home-video-picker"><select id="ux-home-video-select" tabindex="-1" aria-hidden="true">${videos.map(v=>`<option value="${esc(v.id)}">${esc(v.title||'未命名视频')}</option>`).join('')}</select><button type="button" id="ux-home-video-trigger" class="ux-home-video-trigger" aria-label="切换${watching?'观看':'跟练'}视频" aria-haspopup="listbox" aria-expanded="false" aria-controls="ux-home-video-menu" data-no-icon="true"><span></span><b aria-hidden="true">⌄</b></button></div>`:''}</div><div id="ux-home-video-content"></div>`;
     const draw=()=>{
       const resume=video&&Session.active?.videoId===video.id;
@@ -250,12 +333,15 @@ const UX = {
       const label=video?(resume?(watching?'继续观看':'继续跟练'):(watching?'点击观看':'点击开练')):'导入第一个视频';
       const title=video?.title||(watching?'把喜欢的视频放在这里':'把喜欢的课程放在这里');
       const duration=Number(video?.durationSec)>0?fmtSeconds(video.durationSec):'';
-      const note=video?[resume?'上次未完成':plan?`今日安排 · ${plan.time}`:video.favorite?'已收藏':watching?'随时观看':'随时开练',video.source==='local'?'本地视频':'B 站'].join(' · '):'支持 B 站 / 抖音链接或本地视频';
-      /* 时段视图显示该时段自己的分账（早上/晚上），「全部」显示总数；瘦脸与观看板块各自取数 */
       const periodLabel=periodSlot?(periodSlot==='morning'?'早上':'晚上'):'今日';
+      const fixed=watching&&video&&typeof FixedPracticeCore!=='undefined'&&FixedPracticeCore.isPinned(Store.db,mode,periodSlot,video.id);
+      const clock=fixed?FixedPracticeCore.timeFor(Store.db,mode,periodSlot):'';
+      const status=resume?'上次未完成':fixed?(clock?`${periodLabel} ${clock} · 固定练`:`${periodLabel} · 固定练`):(!watching&&plan)?`今日安排 · ${plan.time}`:video.favorite?'已收藏':watching?'随时观看':'随时开练';
+      const note=video?[status,video.source==='local'?'本地视频':'B 站'].join(' · '):'支持 B 站 / 抖音链接或本地视频';
+      /* 时段视图显示该时段自己的分账（早上/晚上），「全部」显示总数；瘦脸与观看板块各自取数 */
       const progSec=watching?Store.dayWatchingPeriod(todayKey(),periodSlot,mode):Store.dayTrainingPeriod(todayKey(),periodSlot);
       const progress=`${periodLabel}已${watching?'观看':'跟练'} ${Math.round(progSec/60)} 分钟`;
-      $('#ux-home-video-content',box).innerHTML=`<button type="button" class="ux-home-video-card" id="ux-home-video-play" data-no-icon="true" aria-label="${esc(label+'：'+title)}">
+      $('#ux-home-video-content',box).innerHTML=`<button type="button" class="ux-home-video-card" id="ux-home-video-play" data-poster-for="${esc(video?.id || '')}" data-no-icon="true" aria-label="${esc(label+'：'+title)}">
         <span class="ux-home-video-cover">
           <span class="ux-home-video-fallback" aria-hidden="true">${Icon3D.makeIcon(video?'film':'video').outerHTML}</span>
           ${video?.pic?`<img class="ux-home-video-poster" src="${esc(video.pic)}" alt="" referrerpolicy="no-referrer" draggable="false">`:''}
@@ -269,6 +355,7 @@ const UX = {
         if(!Store.videoById(video.id)){App.render();return;}
         App.launchFollow(video.id,resume?Session.active.sessionId:plan?.id||null,{autoplay:true});
       };
+      this.ensureLocalPoster(video, box);
     };
     const select=$('#ux-home-video-select',box);
     if(select){
@@ -283,6 +370,7 @@ const UX = {
       const preview=v=>{
         if(!menu)return;
         const panel=$('.ux-home-video-preview',menu);
+        panel.dataset.previewId=v.id;
         panel.innerHTML=`<div class="ux-home-video-preview-cover">${v.pic?`<img src="${esc(v.pic)}" alt="" referrerpolicy="no-referrer" draggable="false">`:''}<span class="ux-home-video-preview-empty"${v.pic?' hidden':''}>${Icon3D.makeIcon('film').outerHTML}<small>暂无封面</small></span></div><strong>${esc(v.title||'未命名视频')}</strong><small>${v.source==='local'?'本地视频':'B 站视频'}${Number(v.durationSec)>0?' · '+esc(fmtSeconds(v.durationSec)):''}</small>`;
         const img=$('img',panel);if(img)img.onerror=()=>{img.remove();$('.ux-home-video-preview-empty',panel).hidden=false;};
       };
@@ -512,7 +600,9 @@ const UX = {
     }
     const apply=()=>{const query=$('#ux-video-search',bar).value.toLowerCase(),favorites=$('#ux-favorites',bar).checked;const order=$('#ux-video-sort',bar).value;
       $$('.vid-card',box).forEach(card=>{const v=Store.videoById(card.dataset.video);card.hidden=!v||!v.title.toLowerCase().includes(query)||(favorites&&!v.favorite);card.style.order=String(-Math.floor(Date.parse(order==='recent'?(v?.lastUsedAt||v?.addedAt):v?.addedAt)||0)/1000);});};
-    $$('.vid-card',box).forEach((card,i)=>{const v=Store.videoById(card.dataset.video)||videos[i];if(!v)return;card.dataset.video=v.id;const actions=document.createElement('div');actions.className='ux-video-controls';actions.innerHTML=`<button class="btn small ghost">${v.favorite?'取消收藏':'收藏'}</button>${v.source==='local'?'<button class="btn small ghost" data-relocate>重新定位文件</button>':''}<small>${v.playbackVerified?'曾成功读取播放状态':'已加入引用；播放可用性待实际验证'}</small>`;card.appendChild(actions);$('button',actions).onclick=e=>{e.stopPropagation();v.favorite=!v.favorite;Store.save(true);e.currentTarget.textContent=v.favorite?'取消收藏':'收藏';apply();};
+    const pinPeriod=this.watchPhase==='evening'?'evening':'morning',pinClock=mode!=='face'&&typeof FixedPracticeCore!=='undefined'?FixedPracticeCore.timeFor(Store.db,mode,pinPeriod):'',pinText=(pinPeriod==='evening'?'固定到晚上':'固定到早上')+(pinClock?' '+pinClock:'');
+    $$('.vid-card',box).forEach((card,i)=>{const v=Store.videoById(card.dataset.video)||videos[i];if(!v)return;card.dataset.video=v.id;const actions=document.createElement('div');actions.className='ux-video-controls';const pinHtml=mode==='face'?'':`<label class="ux-pin-period"><input type="checkbox" data-pin-video${typeof FixedPracticeCore!=='undefined'&&FixedPracticeCore.isPinned(Store.db,mode,pinPeriod,v.id)?' checked':''}> ${esc(pinText)}</label>`;actions.innerHTML=`<button class="btn small ghost">${v.favorite?'取消收藏':'收藏'}</button>${pinHtml}${v.source==='local'?'<button class="btn small ghost" data-relocate>重新定位文件</button>':''}<small>${v.playbackVerified?'曾成功读取播放状态':'已加入引用；播放可用性待实际验证'}</small>`;card.appendChild(actions);$('button',actions).onclick=e=>{e.stopPropagation();v.favorite=!v.favorite;Store.save(true);e.currentTarget.textContent=v.favorite?'取消收藏':'收藏';apply();};
+      const pin=$('[data-pin-video]',actions);if(pin){const stop=e=>e.stopPropagation();pin.onclick=stop;pin.closest('label').onclick=stop;pin.onchange=()=>{if(typeof FixedPracticeCore==='undefined'){pin.checked=false;return;}const when=FixedPracticeCore.timeFor(Store.db,mode,pinPeriod);if(pin.checked&&!when){pin.checked=false;toast(pinPeriod==='evening'?'先在「调整时长与时间」里写好晚上几点练':'先在「调整时长与时间」里写好早上几点练');return;}FixedPracticeCore.pin(Store.db,mode,pinPeriod,v.id,pin.checked);if(pin.checked)this.rememberHomeVideo(mode,pinPeriod,v.id);Store.save(true);App.render();};}
       if(v.source==='local')native.videoExists(v.localPath).then(exists=>{if(!exists&&card.isConnected)$('small',actions).textContent='文件已移动或无法读取，请重新定位';});
       const relocate=$('[data-relocate]',actions);if(relocate)relocate.onclick=async e=>{e.stopPropagation();const r=await native.pickLocalVideo();if(!r)return;if(!/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(r.path))return toast('请选择视频文件','red');v.localPath=r.path;Store.rememberVideoPath(v);v.playbackVerified=false;Store.save(true);toast('已更新文件位置，计划和历史绑定保留');};});
     $$('input,select',bar).forEach(x=>x.oninput=apply);apply();
@@ -611,15 +701,16 @@ App.boot=async function(){await originalBoot();UX.boot();if(typeof Routine!=='un
 Views.importModal=mode=>UX.importVideos(mode);
 
 /* 会话记账的时段归属（E：早晚分账）。addWatchingEntry 是所有会话入账的唯一入口：
-   自动流程到点的会话按流程时段，首页「早上/晚上」槽位视图里开始的会话按所选时段；
+   自动流程到点优先；认知觉醒页再用 watchPhase；瘦脸首页「早上/晚上」才用 facePeriod。
    其余不标记，由 Store 按 entry.start 推断。this 透传，兼容实例化的 Store。 */
 const baseAddWatchingEntry=Store.addWatchingEntry;
 Store.addWatchingEntry=function(dateStr,entry,mode){
   try{
     if(entry&&typeof entry==='object'&&entry.period!=='morning'&&entry.period!=='evening'){
       const routinePeriod=typeof Routine!=='undefined'&&Routine.active&&['morning','evening'].includes(Routine.active.period)?Routine.active.period:null;
+      const watchPeriod=App.currentView==='awakening'&&['morning','evening'].includes(UX.watchPhase)?UX.watchPhase:null;
       const viewPeriod=['morning','evening'].includes(UX.facePeriod)?UX.facePeriod:null;
-      const period=routinePeriod||viewPeriod;
+      const period=routinePeriod||watchPeriod||viewPeriod;
       if(period)entry.period=period;
     }
   }catch{}

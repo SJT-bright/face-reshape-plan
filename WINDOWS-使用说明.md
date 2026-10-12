@@ -1,13 +1,13 @@
 # Windows 使用与构建
 
-适用于 Windows 10 / 11 的 x64 电脑。Mac 和 Windows 使用本仓库同一套 MIT 源码，当前版本为 **1.8.5**。
+适用于 Windows 10 / 11 的 x64 电脑。Mac 和 Windows 使用本仓库同一套 MIT 源码，当前版本为 **1.8.6**。界面、栏目和操作与 Mac 版相同。
 
 ## 下载与打开
 
-在 [v1.8.5 发布页](https://github.com/SJT-bright/face-reshape-plan/releases/tag/v1.8.5) 选择：
+在 [v1.8.6 发布页](https://github.com/SJT-bright/face-reshape-plan/releases/tag/v1.8.6) 选择：
 
-- `Life-Reshape-Plan-1.8.5-Windows-x64-Setup.exe`：安装向导，可选择安装位置，创建桌面与开始菜单快捷方式。
-- `Life-Reshape-Plan-1.8.5-Windows-x64.zip`：完整解压后双击「人生重塑计划.exe」。保留整个目录，不能只拷贝 EXE。
+- `Life-Reshape-Plan-1.8.6-Windows-x64-Setup.exe`：安装向导，可选择安装位置，创建桌面与开始菜单快捷方式。
+- `Life-Reshape-Plan-1.8.6-Windows-x64.zip`：完整解压后双击「人生重塑计划.exe」。保留整个目录，不能只拷贝 EXE。
 - `SHA256SUMS.txt`：上述文件的 SHA-256 校验值；`windows-validation.json` 记录打包程序的启动检查。
 
 安装包尚未配置 Windows Authenticode 证书。Windows 可能显示未知发布者，下载时核对本仓库发布地址与校验值。
@@ -24,8 +24,12 @@
 ├── skin-photos\
 ├── body-photos\
 ├── meal-photos\
-└── imported-videos\
+├── imported-videos\
+├── life-videos\
+└── skincare-videos\
 ```
+
+护肤页点「开始护肤」即打开摄像头录像，点「结束视频」写入 `skincare-videos\`。Windows 的安装目录只放程序，录像和照片都在这个用户资料目录。
 
 关闭窗口默认留在系统托盘，提醒需要应用持续运行。托盘菜单可重新显示窗口或退出；勿扰和提醒时间在设置中调整。
 

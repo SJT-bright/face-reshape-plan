@@ -553,7 +553,6 @@ const Skincare = {
       <div class="card">
         <h3>🔬 今日皮肤状态
           <span class="h-extra">${log && score ? `已记录 · 评分 ${score.score}/100（含引擎推导）` : '还没记录'}</span>
-          <button class="btn primary small" id="sk-skin-shoot" type="button" data-no-icon="true">📸 拍摄今日皮肤</button>
         </h3>
         <p class="hint" style="margin:0 0 10px">每天 <b>30 秒</b>：记痘痘数量、肤感和大概感受就够——眼周/毛孔/泛红/屏障等由引擎根据<b>昨晚睡眠与你的历史</b>自动推导（显式记录优先于推导）。评分为<b>自评加权参考，非医学诊断</b>：<details style="display:inline"><summary style="cursor:pointer; display:inline; color:#7b74e2">查看权重口径</summary>
           <span>痘痘 ${Math.round(SkinEngine.ACNE_WEIGHT * 100)}% · ${SkinEngine.PARAMS.map((p) => `${p.label} ${Math.round(p.weight * 100)}%`).join(' · ')}（主客观 7:3 融合）。痘痘按病灶计数计分，与痤疮临床试验的病灶计数终点口径一致；各维度权重为设计取值（文献不提供合成权重），非临床分级</span></details></p>
@@ -625,9 +624,16 @@ const Skincare = {
     const photos = this._photoList(kind).slice(0, 30);
     const today = todayKey();
     const weight = Store.db.strength && Store.db.strength.bmiProfile ? Store.db.strength.bmiProfile.weightKg : '';
+    const skinKind = kind === 'skin';
+    const photoTitle = skinKind ? '皮肤照片' : '📸 照片档案';
+    const photoExtra = skinKind ? '护肤过程在上方录像。这里只留以前的照片。' : '同一角度光线，变化才可比';
+    const photoShoot = skinKind ? '' : '<button class="btn primary small" id="sk-photo-shoot" type="button" data-no-icon="true">📸 拍摄</button>';
+    const photoEmpty = skinKind
+      ? '护肤已经改成录像。点上方「开始护肤」。这里可以导入以前拍的照片。'
+      : '还没有照片。点右上方「拍摄」打开摄像头，或导入已有照片。';
     return `
       <div class="card">
-        <h3 class="sk-photo-heading">📸 照片档案 <span class="h-extra">同一角度光线，变化才可比</span><button class="btn primary small" id="sk-photo-shoot" type="button" data-no-icon="true">📸 拍摄</button></h3>
+        <h3 class="sk-photo-heading">${photoTitle} <span class="h-extra">${photoExtra}</span>${photoShoot}</h3>
         <details style="margin:4px 0 8px"><summary style="cursor:pointer; font-size:12px; color:#7b74e2">📷 拍摄一致性小贴士（点开）</summary>
           <span style="display:block; font-size:12px; color:#64758a; margin-top:4px">同一时间（建议晨起洗脸后）· 正面平视同一角度 · 自然光、素颜、摘掉眼镜与刘海——照片越一致，AI 对比与评分趋势越可信。</span></details>
         <div class="row" style="align-items:center; flex-wrap:wrap; gap:8px">
@@ -656,8 +662,9 @@ const Skincare = {
                 <img data-photo-file="${esc(p.file)}" data-photo-kind="${esc(p.kind || kind)}" alt="${esc(p.date)}">
                 <figcaption>${esc(p.date.slice(5))}${p.local ? ' '+esc(p.local.slice(11)) : ''}${p.weightKg ? ' · ' + p.weightKg + 'kg' : ''}${p.source==='weixin-life-diary' ? ' · 微信' : ''}</figcaption>
               </figure>`).join('')}
-          </div>` : '<div class="empty" style="padding:18px 0">还没有照片。点右上方「拍摄」打开摄像头，或导入已有照片。</div>'}
+          </div>` : `<div class="empty" style="padding:18px 0">${photoEmpty}</div>`}
         </div>
+        ${typeof MediaActions!=='undefined' ? MediaActions.videosHtml(kind)+MediaActions.trashHtml(kind) : ''}
       </div>`;
   },
 
@@ -807,7 +814,6 @@ const Skincare = {
   },
 
   _bindSkin(root) {
-    const shoot=$('#sk-skin-shoot',root);if(shoot)shoot.onclick=()=>CareCamera.shoot({kind:'skin',date:todayKey(),returnTab:'record'});
     /* 分段选择：单选切换 */
     $$('.sk-seg', root).forEach((seg) => {
       $$('button', seg).forEach((btn) => {
@@ -1128,19 +1134,7 @@ const Skincare = {
     $('#pv-prev', card).onclick = () => go(idx - 1);
     $('#pv-next', card).onclick = () => go(idx + 1);
     $('#pv-del', card).onclick = async () => {
-      if (!await confirmModal('删除照片', '仅删除这张照片记录，皮肤日志不受影响。', '删除')) return;
-      await native.deleteSkinPhoto(p.file, p.kind || kind);
-      Store.db.skin.photos = Store.db.skin.photos.filter((x) => x.id !== p.id);
-      if(p.sourceKey){
-        Store.db.photoImportVersions=Store.db.photoImportVersions || {};
-        Store.db.photoImportVersions[p.sourceKey]={revision:p.sourceRevision || 1,state:'manual-deleted'};
-      }
-      /* 删的是今天的照片时清掉自动识图标记：否则当天补拍新照会被「已跑过」挡住不再分析（走查 #4） */
-      if (Store.db.skin.aiAutoRun && Store.db.skin.aiAutoRun.date === todayKey()) delete Store.db.skin.aiAutoRun;
-      Store.save(true);
-      closeModal();
-      toast('已删除');
-      App.render();
+      await MediaActions.change(p.id,'photo','delete');
     };
     $('#pv-compare', card).onclick = () => {
       const others = list.filter((x) => x.id !== p.id);
@@ -1179,6 +1173,7 @@ const Skincare = {
     const active = Store.activeCycle();
     root.innerHTML = `
       <div class="view">
+        <div id="sk-session" class="sk-session"></div>
         <div id="sk-skin-today">${this._skinTodayCard()}</div>
         <div id="sk-face-advice">${this._faceAdviceCard()}</div>
         <div id="sk-skin-photos">${this._skinPhotosCard()}</div>
@@ -1234,6 +1229,7 @@ const Skincare = {
         toast(on ? `皮肤记录提醒已开启（每晚 ${v}）✓` : '皮肤记录提醒已关闭 ✓', 'green');
       };
     }
+    if (typeof SkincareSession !== 'undefined') SkincareSession.mount($('#sk-session', root));
     this._bindSkin(root);
     /* 自动识图放在渲染与绑定之后：分析进行中才能正确禁用按钮、显示「分析中」 */
     this._maybeAutoAnalyze();
@@ -1274,8 +1270,7 @@ const Skincare = {
     const el = document.createElement('div');
     el.className = 'cycle-card' + (isActive ? ' active-cycle' : '');
     const stepRow = (s, phase) => `
-      <div class="sk-step ${phase}" data-sid="${s.id}" data-phase="${phase}">
-        <div class="chk">✓</div>
+      <div class="sk-step sk-step-ref ${phase}" data-sid="${s.id}" data-phase="${phase}">
         <div><div class="sk-name">${esc(s.name)}</div>${s.detail ? `<div class="sk-detail">${esc(s.detail)}</div>` : ''}</div>
       </div>`;
     const col = (key, ico, label) => `
@@ -1297,20 +1292,8 @@ const Skincare = {
         ${col('morning', '☀️', '晨间')}
         ${col('day', '🌤️', '日间')}
         ${col('evening', '🌙', '晚间')}
-      </div>`;
-    // 列表里的勾选 = 打今天的卡
-    const todayDone = Store.daySkincare(todayKey());
-    $$('.sk-step', el).forEach(rowEl => {
-      const sid = rowEl.dataset.sid, ph = rowEl.dataset.phase;
-      if ((todayDone[ph] || []).includes(sid)) rowEl.classList.add('done');
-      rowEl.onclick = () => {
-        if (!isActive) { toast('该周期今日未生效，请编辑周期日期后打卡'); return; }
-        const checked = Store.toggleSkincareStep(todayKey(), ph, sid);
-        rowEl.classList.toggle('done', checked);
-        App.refreshStatusPill();
-        toast(checked ? '已打卡 ✓' : '已取消', 'green');
-      };
-    });
+      </div>
+      <p class="hint">这些步骤只是参考，不用逐个打勾。护肤时用上方「开始护肤」，做完点「结束视频」。</p>`;
     $$('.sk-add', el).forEach(btn => {
       btn.onclick = (e) => { e.stopPropagation(); this.quickAddModal(btn.dataset.phase, () => (typeof App !== 'undefined' && typeof App.render === 'function' ? App.render() : this.view($('#view-root')))); };
     });

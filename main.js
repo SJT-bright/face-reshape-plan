@@ -14,7 +14,11 @@ const { parseHHmm, reminderDue } = require('./src/js/reminder-util');
 const PortableBackup = require('./src/js/portable-backup');
 const PhotoLib = require('./src/js/photo-library');
 const HubPhotoStore = require('./src/js/hub-photo-store');
+const MediaTrash = require('./src/js/media-trash');
+const HubVideoStore = require('./src/js/hub-video-store');
 const makeKeyStore = require('./src/js/secure-key');
+const { videoPoster } = require('./src/js/video-poster');
+const SkincareVideoStore = require('./src/js/skincare-video-store');
 const Reminders = require('./src/js/reminders-v2');
 const keys = () => makeKeyStore(dataDir(), safeStorage);
 let pendingRestore = null;
@@ -346,8 +350,15 @@ function hubDispatchPhoto(req,res,raw) {
   try {validated=HubPhotoStore.validate(JSON.parse(raw));}
   catch {return hubRespond(res,400,{ok:false,error:'照片字段或摘要无效'});}
   if(!hubRendererAvailable())return hubRespond(res,503,{ok:false,error:'应用数据未就绪'});
+  // Check renderer-saved tombstones before any physical write. A rejected replay
+  // must not recreate an original that the owner removed in the App.
+  const known=db?.photoImportVersions?.[validated.photo.sourceKey];
+  if(known?.state==='manual-deleted')return hubRespond(res,409,{ok:false,conflict:true,error:'这张照片已在应用内删除，请先核对'});
+  if(known && known.revision>validated.photo.revision)return hubRespond(res,200,{ok:true,...validated.photo,stale:true});
+  const existing=[...(db?.rhythm?.mealPhotos || []),...(db?.skin?.photos || [])].find(p=>p.sourceKey===validated.photo.sourceKey);
+  if(existing && existing.sha256!==validated.photo.sha256)return hubRespond(res,409,{ok:false,conflict:true,error:'原始照片摘要发生变化，请先核对'});
   let photo;
-  try {photo=HubPhotoStore.save(validated,mediaDir(validated.photo.kind));}
+  try {HubPhotoStore.save(validated,mediaDir(validated.photo.kind));photo=HubPhotoStore.projectMeal(validated,path.join(isolatedProfile()?dataDir():projectRoot(),'饮食'));}
   catch {return hubRespond(res,503,{ok:false,error:'照片文件暂时无法保存'});}
   const actionId=`photo-${Date.now().toString(36)}-${(++hubActionSeq).toString(36)}`;
   hubPending.set(actionId,{
@@ -385,9 +396,28 @@ function hubDispatchAction(req, res, raw) {
   }
 }
 
+function hubDispatchWorkout(req,res,raw){
+  if(!hubPhotoAuthorized(req))return hubRespond(res,403,{ok:false,error:'训练同步未授权'});
+  let workout;
+  try{workout=JSON.parse(raw);}catch{return hubRespond(res,400,{ok:false,error:'请求体必须是 JSON'});}
+  if(!workout || !/^[a-f0-9]{64}$/.test(workout.sourceKey || '') || !Number.isSafeInteger(workout.revision) || workout.revision<1 || workout.revision>=100000000 ||
+     !['active','cancelled'].includes(workout.state) || !/^20\d{2}-\d{2}-\d{2}$/.test(workout.date || '') ||
+     !HubPhotoStore.validateDate(workout.date) || workout.date>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date()) ||
+     typeof workout.description!=='string' || !workout.description.trim() || workout.description.length>180 ||
+     typeof workout.rawText!=='string' || workout.rawText.length>500 || typeof workout.sentAt!=='string' || !workout.sentAt.endsWith('+08:00') ||
+     !Number.isFinite(Date.parse(workout.sentAt)) || Date.parse(workout.sentAt)>Date.now()+60000)return hubRespond(res,400,{ok:false,error:'训练字段无效'});
+  if(!hubRendererAvailable())return hubRespond(res,503,{ok:false,error:'应用数据未就绪'});
+  const actionId=`workout-${Date.now().toString(36)}-${(++hubActionSeq).toString(36)}`;
+  hubPending.set(actionId,{respond:r=>hubRespond(res,r?.ok?200:r?.conflict?409:r?.retryable?503:400,r),
+    timer:setTimeout(()=>{if(hubPending.delete(actionId))hubRespond(res,504,{ok:false,error:'训练记录写入超时'});},5000)});
+  try{mainWindow.webContents.send('hub:action',{actionId,op:'workout-import',workout});}
+  catch{const pending=hubPending.get(actionId);if(pending){clearTimeout(pending.timer);hubPending.delete(actionId);}hubRespond(res,503,{ok:false,error:'训练转发失败'});}
+}
+
 function hubHandle(req, res) {
   let url;
   try { url = new URL(req.url, `http://127.0.0.1:${HUB_PORT}`); } catch { return hubRespond(res, 400, { ok: false, error: 'bad request' }); }
+  if(req.method==='POST' && url.pathname==='/hub/video')return hubReceiveVideo(req,res);
   if (req.method === 'GET' && url.pathname === '/hub/health') {
     return hubRespond(res, 200, { ok: true, app: APP_NAME });
   }
@@ -401,7 +431,7 @@ function hubHandle(req, res) {
     if (raw == null) return hubRespond(res, 500, { ok: false, error: '今日任务导出不可用' });
     try { return hubRespond(res, 200, JSON.parse(raw)); } catch { return hubRespond(res, 500, { ok: false, error: '今日任务文件损坏' }); }
   }
-  if (req.method === 'POST' && ['/hub/action','/hub/meal','/hub/photo'].includes(url.pathname)) {
+  if (req.method === 'POST' && ['/hub/action','/hub/meal','/hub/photo','/hub/workout'].includes(url.pathname)) {
     const photoRoute=url.pathname==='/hub/photo';
     if(photoRoute && !hubPhotoAuthorized(req))return hubRespond(res,403,{ok:false,error:'照片同步未授权'});
     const chunks = [];
@@ -417,12 +447,39 @@ function hubHandle(req, res) {
     });
     req.on('end', () => {
       if(tooLarge)return;
-      try { (photoRoute ? hubDispatchPhoto : url.pathname === '/hub/meal' ? hubDispatchMeal : hubDispatchAction)(req, res, Buffer.concat(chunks).toString('utf8')); } catch (e) { hubRespond(res, 500, { ok: false, error: '服务器内部错误' }); }
+      try { (photoRoute ? hubDispatchPhoto : url.pathname === '/hub/meal' ? hubDispatchMeal : url.pathname==='/hub/workout' ? hubDispatchWorkout : hubDispatchAction)(req, res, Buffer.concat(chunks).toString('utf8')); } catch (e) { hubRespond(res, 500, { ok: false, error: '服务器内部错误' }); }
     });
     req.on('error', () => { /* 客户端中断：无需应答 */ });
     return;
   }
   hubRespond(res, 404, { ok: false, error: 'not found' });
+}
+
+function hubReceiveVideo(req,res){
+  if(!hubPhotoAuthorized(req))return hubRespond(res,403,{ok:false,error:'视频同步未授权'});
+  let meta;
+  try{const raw=String(req.headers['x-life-video-metadata'] || '');if(raw.length>4096)throw Error('header');meta=HubVideoStore.validate(JSON.parse(Buffer.from(raw,'base64').toString('utf8')));
+    if(Number(req.headers['content-length'])!==meta.bytes || req.headers['content-type']!=='application/octet-stream')throw Error('size');}
+  catch{return hubRespond(res,400,{ok:false,error:'视频字段无效'});}
+  if(!hubRendererAvailable())return hubRespond(res,503,{ok:false,error:'应用数据未就绪'});
+  const known=db.videoImportVersions?.[meta.sourceKey];
+  if(known?.state==='manual-deleted')return hubRespond(res,409,{ok:false,conflict:true,error:'视频已在应用内删除，不会自动恢复'});
+  const previous=(db.lifeVideos || []).find(v=>v.sourceKey===meta.sourceKey);
+  if(previous && previous.sha256!==meta.sha256)return hubRespond(res,409,{ok:false,conflict:true,error:'原视频摘要冲突'});
+  if(known?.revision>meta.revision)return hubRespond(res,200,{ok:true,...meta,stale:true});
+  let upload,ended=false;
+  try{upload=HubVideoStore.receiver(meta,mediaDir('lifevideo'));}catch{return hubRespond(res,503,{ok:false,error:'视频目录暂不可用'});}
+  const fail=(status,error)=>{if(ended)return;ended=true;upload.abort();hubRespond(res,status,{ok:false,error});};
+  req.setTimeout(15000,()=>{fail(408,'视频上传超时，请重试');req.destroy();});
+  req.on('data',chunk=>{if(!ended)try{upload.write(chunk);}catch(error){fail(error.code==='VIDEO_LIMIT'?413:503,'视频超过限制或文件暂不可写');}});
+  req.on('aborted',()=>{if(!ended){ended=true;upload.abort();}});req.on('error',()=>{if(!ended){ended=true;upload.abort();}});
+  req.on('end',()=>{
+    if(ended)return;ended=true;let video;try{video=upload.finish();}catch(error){return hubRespond(res,error.code==='VIDEO_INVALID'?400:error.code==='VIDEO_CONFLICT'?409:503,{ok:false,error:'视频内容无效或暂时无法保存'});}
+    const actionId=`video-${Date.now().toString(36)}-${(++hubActionSeq).toString(36)}`;
+    hubPending.set(actionId,{respond:r=>hubRespond(res,r?.ok?200:r?.conflict?409:r?.retryable?503:400,r),timer:setTimeout(()=>{if(hubPending.delete(actionId))hubRespond(res,504,{ok:false,error:'视频记录写入超时'});},5000)});
+    try{mainWindow.webContents.send('hub:action',{actionId,op:'video-import',video});}
+    catch{const pending=hubPending.get(actionId);if(pending){clearTimeout(pending.timer);hubPending.delete(actionId);}hubRespond(res,503,{ok:false,error:'视频转发失败'});}
+  });
 }
 
 function startHubServer() {
@@ -1104,6 +1161,27 @@ ipcMain.handle('backup:restore', () => {
   catch(e){return {ok:false,error:e.message};}
 });
 ipcMain.handle('video:exists', (_e,p) => {try{return fs.statSync(String(p)).isFile();}catch{return false;}});
+ipcMain.handle('video:poster', (event, file) => isAppFrame(event) ? videoPoster(file, path.join(dataDir(), 'video-posters')) : '');
+ipcMain.on('media:change-sync',(event,data,id,type,op)=>{
+  if(!isAppFrame(event)){event.returnValue={ok:false,error:'无效窗口'};return;}
+  try{
+    if(op==='restore'){
+      const record=(data.mediaTrash || []).find(t=>t.id===type+':'+id)?.record;
+      if(!record)throw Error('没有可恢复的记录');
+      const file=type==='video' ? path.join(mediaDir('lifevideo'),record.file) : PhotoLib.locatePhotoFile(record.file,record.kind,mediaDir('skin'),mediaDir('body'),mediaDir('meal'));
+      if(!file || (type==='video' && !/^wx-[a-f0-9]{64}\.(mp4|mov|webm)$/.test(record.file)))throw Error('原文件缺失，未恢复记录');
+      const descriptor=fs.openSync(file,fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+      try{const st=fs.fstatSync(descriptor);if(!st.isFile())throw Error('原文件不可读取');
+        if(record.sha256){const hash=crypto.createHash('sha256'),buffer=Buffer.alloc(65536);let n;while(n=fs.readSync(descriptor,buffer,0,buffer.length,null))hash.update(buffer.subarray(0,n));if(hash.digest('hex')!==record.sha256)throw Error('原文件摘要不符，未恢复记录');}
+      }finally{fs.closeSync(descriptor);}
+    }
+    const next=MediaTrash.change(data,id,type,op);if(saveData(next)!==true)throw Error('媒体记录未能保存，请重试');event.returnValue={ok:true,data:rendererData()};
+  }catch(error){event.returnValue={ok:false,error:op==='restore' && error.code==='ENOENT'?'原文件缺失，未恢复记录':['没有可恢复的记录','原文件缺失，未恢复记录','原文件不可读取','原文件摘要不符，未恢复记录'].includes(error.message)?error.message:'媒体记录未能保存，请重试'};}
+});
+ipcMain.handle('lifevideo:url',(event,file)=>{
+  if(!isAppFrame(event) || !/^wx-[a-f0-9]{64}\.(mp4|mov|webm)$/.test(file || '') || !(db.lifeVideos || []).some(v=>v.file===file))return null;
+  const p=path.join(mediaDir('lifevideo'),file);try{const st=fs.lstatSync(p);return st.isFile() && !st.isSymbolicLink()?require('node:url').pathToFileURL(p).href:null;}catch{return null;}
+});
 
 ipcMain.handle('data:save', (_e, data) => saveData(data));
 
@@ -1243,7 +1321,7 @@ function mediaDir(kind) {
   return p;
 }
 function mediaOpts() {
-  return { skinDir: mediaDir('skin'), bodyDir: mediaDir('body'), mealDir: mediaDir('meal'), videoDir: mediaDir('video'), photoDir: mediaDir('skin') };
+  return { skinDir: mediaDir('skin'), bodyDir: mediaDir('body'), mealDir: mediaDir('meal'), videoDir: mediaDir('video'), lifeVideoDir:mediaDir('lifevideo'), photoDir: mediaDir('skin') };
 }
 function migrateLegacyPhotos() {
   if (isolatedProfile()) return;
@@ -1258,6 +1336,39 @@ function migrateLegacyPhotos() {
     if (changed.length) saveData(db);
   }
 }
+ipcMain.handle('skinvideo:begin', (event, meta) => {
+  if (!isAppFrame(event)) return null;
+  return SkincareVideoStore.createFile(mediaDir('skinvideo'), meta && meta.startedAt);
+});
+ipcMain.handle('skinvideo:append', (event, file, buf) => {
+  if (!isAppFrame(event)) return null;
+  return SkincareVideoStore.appendChunk(mediaDir('skinvideo'), String(file || ''), Buffer.from(buf || []));
+});
+ipcMain.handle('skinvideo:finish', (event, file) => {
+  if (!isAppFrame(event)) return null;
+  return SkincareVideoStore.finishFile(mediaDir('skinvideo'), String(file || ''));
+});
+ipcMain.handle('skinvideo:list', (event) => {
+  if (!isAppFrame(event)) return [];
+  return SkincareVideoStore.listFiles(mediaDir('skinvideo'));
+});
+ipcMain.handle('skinvideo:url', (event, file) => {
+  if (!isAppFrame(event)) return null;
+  const name = String(file || '');
+  const dir = mediaDir('skinvideo');
+  if (!SkincareVideoStore.listFiles(dir).some((item) => item.file === name)) return null;
+  const target = path.join(dir, name);
+  try {
+    const st = fs.lstatSync(target);
+    return st.isFile() && !st.isSymbolicLink() ? require('node:url').pathToFileURL(target).href : null;
+  } catch { return null; }
+});
+ipcMain.handle('skinvideo:openFolder', async (event) => {
+  if (!isAppFrame(event)) return { path: '', error: 'denied', visible: false };
+  const dir = mediaDir('skinvideo');
+  const error = await shell.openPath(dir);
+  return { path: dir, error: error || null, visible: !isolatedProfile() };
+});
 ipcMain.handle('skinphoto:save', (_e, buf, ext, meta) => {
   const bytes = Buffer.from(buf || []);
   if (!bytes.length || bytes.length > 20 * 1024 * 1024) return null;
@@ -1300,10 +1411,11 @@ function cachedPhotoRead(kind, name) {
 }
 ipcMain.handle('skinphoto:read', (_e, name, kind) => cachedPhotoRead(['body','meal'].includes(kind) ? kind : 'skin', String(name || '')));
 ipcMain.handle('skinphoto:delete', (_e, name, kind) => {
-  const p = PhotoLib.locatePhotoFile(name, kind, mediaDir('skin'), mediaDir('body'));
+  const p = PhotoLib.locatePhotoFile(name, kind, mediaDir('skin'), mediaDir('body'),mediaDir('meal'));
   if (!p || !fs.existsSync(p)) return false;
-  fs.rmSync(p, { force: true });
-  photoReadCache.delete(`${kind === 'body' ? 'body' : 'skin'}|${String(name)}`);
+  const trash=path.join(dataDir(),'media-trash-files');fs.mkdirSync(trash,{recursive:true,mode:0o700});
+  fs.renameSync(p,path.join(trash,crypto.randomUUID()+'-'+path.basename(p)));
+  photoReadCache.delete(`${['body','meal'].includes(kind) ? kind : 'skin'}|${String(name)}`);
   return true;
 });
 ipcMain.handle('skinphoto:openFolder', async (_e, kind) => {
@@ -1317,7 +1429,8 @@ ipcMain.handle('skinphoto:folderInfo', (_e, kind) => {
 });
 ipcMain.handle('skinphoto:list', (_e, known, kind, date) => {
   const k = kind === 'body' ? 'body' : 'skin';
-  return PhotoLib.newFiles(mediaDir(k), known || [], k, date || null, { forceKind: true });
+  const removed=(db.mediaTrash || []).filter(t=>t.type==='photo').map(t=>t.record.file);
+  return PhotoLib.newFiles(mediaDir(k), [...(known || []),...removed], k, date || null, { forceKind: true });
 });
 ipcMain.handle('media:openRoot', async () => {
   const dir = isolatedProfile() || process.platform === 'win32' ? dataDir() : projectRoot();

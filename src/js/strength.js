@@ -326,8 +326,11 @@ const Strength = {
   },
 
   _bodyPhotosHtml(date) {
-    const photos=(Store.db.skin?.photos || []).filter(p=>p.kind==='body' && p.date===date).slice(-6);
-    return `<div class="card"><div class="rhythm-photo-heading"><h3>健身成果照片</h3><button class="btn small ghost" id="st-photo-all">查看全部健身照片</button></div><p class="hint">微信先说“健身成果照片”再发图，按日期保存在本机。</p>${photos.length ? `<div class="life-photo-grid">${photos.map(p=>`<button class="life-photo-thumb" type="button" data-body-photo="${esc(p.id)}"><img data-photo-file="${esc(p.file)}" data-photo-kind="body" alt="${esc(date)} 健身成果"><span>${p.local ? esc(p.local.slice(11)) : esc(date)}${p.source==='weixin-life-diary'?' · 微信':''}</span></button>`).join('')}</div>` : '<p class="hint">这一天还没有健身成果照片。</p>'}</div>`;
+    const all=(Store.db.skin?.photos || []).filter(p=>p.kind==='body' && p.date===date);
+    const photos=all.slice(-6);
+    const workouts=Object.values(Store.db.workoutImports || {}).filter(w=>w.date===date && w.state==='active');
+    // Shared icon enhancement honours this literal-text boundary.
+    return (typeof MediaActions!=='undefined' ? MediaActions.videosHtml('body',date)+MediaActions.trashHtml('body',date) : '')+`<div class="card" data-literal-text><div class="rhythm-photo-heading"><h3>微信训练记录与成果照片</h3><button class="btn small ghost" id="st-photo-all">查看全部健身照片</button></div><p class="hint">微信说“今天练了三头和胸”，随后发照片。按当前计划匹配，原文与图片一起保留；不会代填组数、重量或完成整天。</p>${workouts.map(w=>`<div class="rhythm-record" data-workout-source="${esc(w.sourceKey)}"><strong>${esc(w.description)}</strong><span>${w.match?.status==='matched' ? '匹配：'+esc(w.match.templateName)+' · '+esc(w.match.dayName) : '计划匹配待确认'}</span></div>`).join('')}${photos.length ? `<div class="life-photo-grid">${photos.map(p=>{const w=(Store.db.workoutImports || {})[p.trainingSourceKey];return `<button class="life-photo-thumb" type="button" data-body-photo="${esc(p.id)}"><img data-photo-file="${esc(p.file)}" data-photo-kind="body" alt="${esc(date)} 健身成果"><span>${p.local ? esc(p.local.slice(11)) : esc(date)}${p.timeKind==='sent'?' · 发送时间':''}</span>${w ? `<small>${esc(w.match?.dayName || w.description)}${w.state==='cancelled'?' · 记录已撤销':''}</small>` : ''}</button>`;}).join('')}</div>` : '<p class="hint">这一天还没有健身成果照片。</p>'}${all.length>6?`<p class="hint">当天共 ${all.length} 张，上方展示最近6张；“查看全部”可浏览所有原图。</p>`:''}</div>`;
   },
 
   /* ================= 公共：日期导航（今日训练页） ================= */
@@ -816,34 +819,32 @@ const Strength = {
     return null;
   },
 
-  /* 力量训练时机提示：按上一次进食给出最早开始的钟点，不倒计时。
-     正餐 ≥2 小时、加餐 ≥1 小时，取 Mayo Clinic（正餐 2–3 小时、大餐 3–4 小时、加餐约 1 小时）的保守下限。 */
+  /* 力量训练时机：大字只放「开始锻炼」的钟点。正餐 +2 小时，加餐 +1 小时。 */
   _mealHintCopy(advice) {
     if (!advice.hasMeal) {
       return {
-        extra: '还没有进食记录',
-        lead: '记下一餐吃完的时间后，这里会按那一餐告诉你力量训练最早几点开始。',
-        note: '早餐、午餐、晚餐后至少 2 小时。上午加餐、下午加餐、晚上加餐后约 1 小时。不记吃了多少，所以正餐取 2 小时；很油很饱再自行多等约 1 小时。散步不用等这么久，餐后 10–15 分钟就可以。'
+        clock: '',
+        basis: '',
+        aside: '记下一餐吃完的时间后，这里会写出力量训练最早可以开始的钟点。',
+        note: '早餐、午餐、晚餐后 2 小时。上午加餐、下午加餐、晚上加餐后 1 小时。很油很饱再自行多等约 1 小时。散步不用等这么久，餐后 10–15 分钟就可以。'
       };
     }
     const meal = advice.lastMeal;
     const v = advice.vigorous;
     const when = meal.priorDay ? `${meal.local.slice(5, 10)} ${meal.time}` : meal.time;
-    const gapWord = meal.isSnack ? '加餐后约 1 小时' : '正餐后至少 2 小时';
-    let lead;
+    const gapWord = meal.isSnack ? '加餐后 1 小时' : '正餐后 2 小时';
+    let aside;
     if (!v.feasible) {
-      lead = `上次进食是${meal.typeLabel} ${when}。按 ${advice.bedtime} 就寝，力量训练要在 ${v.capText} 前结束，今晚已经排不开。可以散步或拉伸，力量训练改到明天 ${advice.performanceWindow.start}–${advice.performanceWindow.end}。`;
+      aside = `今晚排不开，改到明天 ${advice.performanceWindow.start}。`;
     } else if (v.ready || !advice.isToday) {
-      lead = advice.isToday
-        ? `上次进食是${meal.typeLabel} ${when}。${gapWord}的间隔已经过去，现在可以开始力量训练，请在 ${v.capText} 前结束。`
-        : `这一天最后一次进食是${meal.typeLabel} ${meal.time}。力量训练最早 ${v.atText}，最晚 ${v.capText} 前结束。`;
+      aside = advice.isToday ? `现在可以开始。请在 ${v.capText} 前结束。` : `请在 ${v.capText} 前结束。`;
     } else {
-      lead = `上次进食是${meal.typeLabel} ${when}。力量训练建议 ${v.atText} 之后开始（${gapWord}），并在 ${v.capText} 前结束。`;
+      aside = `到这个点再开始。请在 ${v.capText} 前结束。`;
     }
     const note = meal.isSnack
-      ? '加餐按约 1 小时（Mayo Clinic）。低强度散步餐后 10–15 分钟就可以，不必等这一小时。'
-      : '正餐按至少 2 小时（Mayo Clinic 普通正餐 2–3 小时的下限；大餐 3–4 小时，很油很饱再多等约 1 小时）。低强度散步餐后 10–15 分钟就可以。睡前 2 小时内不做力量训练（Stutz 2019）。';
-    return { extra: `上次 ${meal.typeLabel} ${when}`, lead, note };
+      ? '加餐按 1 小时（Mayo Clinic）。正餐才是 2 小时。低强度散步餐后 10–15 分钟就可以。'
+      : '正餐按 2 小时（Mayo Clinic 普通正餐 2–3 小时的下限）。大餐、很油很饱再多等约 1 小时。睡前 2 小时内不做力量训练。';
+    return { clock: v.atText, basis: `${meal.typeLabel} ${when} · ${gapWord}`, aside, note };
   },
 
   _mealTimingCard(date) {
@@ -855,10 +856,19 @@ const Strength = {
     } catch { return ''; }
     if (!advice) return '';
     const copy = this._mealHintCopy(advice);
+    const hero = copy.clock ? `
+        <div class="st-meal-hero">
+          <div class="st-meal-clock" id="st-meal-clock">${esc(copy.clock)}</div>
+          <div>
+            <div class="st-meal-clock-label">开始锻炼</div>
+            <p class="st-meal-basis">${esc(copy.basis)}</p>
+            <p class="st-meal-aside">${esc(copy.aside)}</p>
+          </div>
+        </div>` : `<p>${esc(copy.aside)}</p>`;
     return `
       <div class="card st-meal-hint" id="st-meal-timing">
-        <h3>力量训练时机 <span class="h-extra">${esc(copy.extra)}</span></h3>
-        <p>${esc(copy.lead)}</p>
+        <h3>力量训练时机</h3>
+        ${hero}
         <p class="hint">${esc(copy.note)}</p>
         <div class="row" style="justify-content:space-between; margin-top:8px; align-items:center">
           <span class="hint">${esc(advice.disclaimer)}</span>

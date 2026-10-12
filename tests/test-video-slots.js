@@ -152,7 +152,7 @@ test('分账与总数随 save/init 持久化（重启后当日分账仍在）', 
 
 function loadUX(store, extra = {}) {
   const sandbox = {
-    ...util, Store: store, window: global.window, console,
+    ...util, todayKey: () => TODAY, Store: store, window: global.window, console,
     document: { addEventListener() {}, querySelector() { return null; }, querySelectorAll() { return []; } },
     App: { render() {}, go() {}, boot() {} },
     Strength: { _templateView() {}, _saveTemplate() {} },

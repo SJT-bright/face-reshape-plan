@@ -213,8 +213,9 @@ const Views = {
     const periods = (collection.periods || []).filter(p => periodNames[p]);
     root.innerHTML = `
       <div class="view awakening-view" data-video-mode="${esc(mode)}">
-        <div class="awakening-heading">
-          <div class="awakening-periods" aria-label="观看时段">${periods.map(p => `<button type="button" class="tag awakening-period" data-watch-period="${p}" aria-pressed="false">${p === 'morning' ? '☀️' : '🌙'} ${periodNames[p]}</button>`).join('')}<span class="hint" id="watch-current-period"></span></div>
+        <div class="soft-period-row awakening-heading">
+          <div class="soft-segments awakening-periods" aria-label="观看时段">${periods.map(p => `<button type="button" class="tag awakening-period" data-watch-period="${p}" aria-pressed="false" data-no-icon="true">${p === 'morning' ? '☀️' : '🌙'} ${periodNames[p]}</button>`).join('')}</div>
+          <span class="hint" id="watch-current-period"></span>
           <button class="btn small ghost" id="edit-video-collection">编辑板块</button>
         </div>
         <div class="today-top awakening-top">
@@ -231,7 +232,6 @@ const Views = {
           </div>
         </div>
         <div class="card awakening-player">
-          <div class="awakening-player-copy"><h3>现在看什么</h3><p class="hint">挑一个喜欢的视频，随时开始，随时继续。</p></div>
           <aside class="ux-home-video" id="ux-home-video" aria-label="${esc(collection.name)}快捷视频"></aside>
         </div>
         <div class="card awakening-library">
@@ -269,7 +269,7 @@ const Views = {
         ? ` · ✅ 完整${watching ? '观看' : '跟练'} ${stats.completed} 次${stats.days ? ` · 有记录 ${stats.days} 天` : ''}`
         : '';
       card.innerHTML = `
-        ${v.source === 'bilibili' && v.pic ? `<img class="vid-cover" src="${esc(v.pic)}" referrerpolicy="no-referrer">` : `<div class="vid-cover ph">🎞️</div>`}
+        ${v.pic ? `<img class="vid-cover" src="${esc(v.pic)}" referrerpolicy="no-referrer">` : `<div class="vid-cover ph">🎞️</div>`}
         <div class="vid-info">
           <div class="vid-title">${esc(v.title)}</div>
           <div class="vid-meta"><span>${v.source === 'bilibili' ? 'B站' : v.source === 'douyin' ? (v.downloadState === 'error' ? '下载失败 · 点击重试' : '待下载') : '本地'}${v.durationSec ? ' · ' + Math.round(v.durationSec / 60) + '分钟' : ''}${statLine}</span></div>

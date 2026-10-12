@@ -196,9 +196,21 @@
 }
 .st-belong .hint { flex: 1 1 200px; margin: 0; }
 
-/* 力量训练时机：按上一次进食给出钟点，不倒计时 */
+/* 力量训练时机：大字只放开始锻炼的钟点 */
 .st-meal-hint p { margin: 6px 0 0; line-height: 1.55; }
 .st-meal-hint .hint { white-space: normal; }
+.st-meal-hero { display: flex; align-items: center; gap: 22px; margin-top: 4px; }
+.st-meal-clock {
+  font-size: 64px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.045em;
+  line-height: 0.9;
+}
+.st-meal-clock-label { font-size: 15px; font-weight: 700; }
+.st-meal-basis, .st-meal-aside { margin: 4px 0 0; font-size: 13px; }
+.st-meal-basis { color: #5c6b80; }
+html.dark .st-meal-basis { color: #b7c0ce; }
 
 /* 计划 vs 实际表格 */
 .st-table {

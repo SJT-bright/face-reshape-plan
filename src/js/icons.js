@@ -64,7 +64,9 @@
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         const p = node.parentElement;
-        if (!p || p.closest('.icon3d, script, style, textarea, option')) return NodeFilter.FILTER_REJECT;
+        // Literal user facts and plan names must not lose characters such as
+        // ＋ to decorative icons. Buttons elsewhere keep their existing style.
+        if (!p || p.closest('.icon3d, script, style, textarea, option, [data-literal-text]')) return NodeFilter.FILTER_REJECT;
         return tokens.some(token => node.nodeValue.includes(token)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
       }
     });

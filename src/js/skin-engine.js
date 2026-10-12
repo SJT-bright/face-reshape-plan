@@ -32,6 +32,7 @@
     db.skin = {
       logs: src.logs && typeof src.logs === 'object' ? src.logs : {},
       photos: Array.isArray(src.photos) ? src.photos : [],
+      videos: Array.isArray(src.videos) ? src.videos : [],
       predictions: src.predictions && typeof src.predictions === 'object' ? src.predictions : {},
       weeklyReports: src.weeklyReports && typeof src.weeklyReports === 'object' ? src.weeklyReports : {},
       faceState: src.faceState && typeof src.faceState === 'object' ? src.faceState : {},

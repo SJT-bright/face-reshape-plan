@@ -1,6 +1,8 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const MAX_BYTES=25*1024*1024;
+const RE=require('./rhythm-engine');
+const MEAL_LABELS=RE.MEAL_TYPE_WINDOWS.map(w=>w.label);
 const hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 
 function imageType(bytes) {
@@ -26,6 +28,9 @@ function validate(input,now=Date.now()) {
       typeof input.sentAt!=='string' || !input.sentAt.endsWith('+08:00') || !Number.isFinite(Date.parse(input.sentAt)) || Date.parse(input.sentAt)>now+60000 ||
       !['sent','occurred'].includes(input.timeKind) || typeof input.note!=='string' || input.note.length>180 ||
       (input.mealSourceKey!=null && !/^[a-f0-9]{64}$/.test(input.mealSourceKey)) ||
+      (input.trainingSourceKey!=null && !/^[a-f0-9]{64}$/.test(input.trainingSourceKey)) ||
+      (input.trainingDate!=null && !validLocal(input.trainingDate+'T00:00')) ||
+      (input.mealLabel!=null && !MEAL_LABELS.includes(input.mealLabel)) ||
       !/^[a-f0-9]{64}$/.test(input.sha256 || '') || typeof input.imageBase64!=='string' ||
       input.imageBase64.length>Math.ceil(MAX_BYTES/3)*4 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(input.imageBase64)) {
     throw new Error('照片字段无效');
@@ -34,7 +39,47 @@ function validate(input,now=Date.now()) {
   const type=imageType(bytes);
   if(!bytes.length || bytes.length>MAX_BYTES || !type || type[1]!==input.mime || hash(bytes)!==input.sha256)throw new Error('照片格式或摘要不匹配');
   const {imageBase64,...photo}=input;
-  return {bytes,ext:type[0],photo:{...photo,file:`wx-${input.sourceKey}.${type[0]}`}};
+  const mealLabel=input.kind==='meal' ? input.mealLabel || (input.timeKind==='occurred' ? RE.mealTypeLabel(RE.classifyMealType(input.local)) : '餐别待确认') : null;
+  return {bytes,ext:type[0],photo:{...photo,mealLabel,file:`wx-${input.sourceKey}.${type[0]}`}};
+}
+
+// Human-readable copies are a projection, never a replacement of originals.
+// The stable source/revision manifest prevents replay or same-meal collisions.
+function projectMeal(validated,root){
+  if(validated.photo.kind!=='meal')return validated.photo;
+  const p=validated.photo;
+  const date=p.timeKind==='occurred' ? p.local.slice(0,10).split('-').map(Number) : null;
+  const folder=date ? `${date[0]}年${date[1]}月${date[2]}日` : '日期待确认';
+  const dir=path.join(root,folder);fs.mkdirSync(dir,{recursive:true,mode:0o700});
+  if(fs.lstatSync(root).isSymbolicLink() || fs.lstatSync(dir).isSymbolicLink())throw new Error('饮食目录不能是符号链接');
+  const manifestFile=path.join(root,'.微信照片索引.json');
+  if(fs.existsSync(manifestFile) && fs.lstatSync(manifestFile).isSymbolicLink())throw new Error('饮食索引不能是符号链接');
+  const manifest=fs.existsSync(manifestFile)?JSON.parse(fs.readFileSync(manifestFile,'utf8')):{};
+  const key=p.sourceKey+':'+p.revision;
+  let relative=manifest[key]?.path;
+  const stem=(date ? folder : '日期待确认')+p.mealLabel;
+  if(!relative){
+    for(let n=1;n<=10000;n++){
+      const name=stem+(n===1?'':`-${String(n).padStart(2,'0')}`)+'.'+validated.ext;
+      if(!fs.existsSync(path.join(dir,name))){relative=folder+'/'+name;break;}
+    }
+  }
+  if(!relative || relative.split('/').length!==2 || relative.split('/')[0]!==folder || !path.basename(relative).startsWith(stem) || path.extname(relative)!=='.'+validated.ext)throw new Error('饮食索引路径无效');
+  manifest[key]={path:relative,sha256:p.sha256,sentAt:p.sentAt,timeKind:p.timeKind};
+  // Reserve a stable destination first. If the process stops before the image
+  // write, the retry fills that same path rather than creating another copy.
+  const temp=manifestFile+'.'+crypto.randomUUID()+'.partial';
+  try{
+    const fd=fs.openSync(temp,'wx',0o600);try{fs.writeFileSync(fd,JSON.stringify(manifest,null,2));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+    fs.renameSync(temp,manifestFile);
+  }finally{if(fs.existsSync(temp))fs.unlinkSync(temp);}
+  const target=path.join(root,relative);
+  if(fs.existsSync(target)){
+    if(fs.lstatSync(target).isSymbolicLink() || hash(fs.readFileSync(target))!==p.sha256)throw new Error('饮食命名照片冲突');
+  }else{
+    save({...validated,photo:{...p,file:path.basename(relative)}},dir);
+  }
+  return {...p,archiveRelativePath:'饮食/'+relative};
 }
 
 function save(validated,dir) {
@@ -64,4 +109,4 @@ function save(validated,dir) {
     if(fs.existsSync(temporary))fs.unlinkSync(temporary);
   }
 }
-module.exports={MAX_BYTES,imageType,validate,save};
+module.exports={MAX_BYTES,imageType,validate,save,projectMeal,validateDate:date=>validLocal(date+'T00:00')};

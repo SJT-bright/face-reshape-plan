@@ -1,7 +1,7 @@
 {
   "name": "face-reshape-plan",
   "productName": "人生重塑计划",
-  "version": "1.8.5",
+  "version": "1.8.6",
   "description": "人生重塑计划 —— 认知唤醒 · 自定义视频板块 · 跟练与护肤 · 饮食与睡眠记录 · 成就地图（macOS / Windows 桌面应用）",
   "author": "Life Reshape Plan",
   "license": "MIT",
@@ -22,7 +22,7 @@
     "test:rhythm": "node --test tests/test-rhythm.js",
     "test:rhythm-ui": "node tests/run-rhythm-ui.js",
     "test:calendar": "node tests/run-calendar-ui.js",
-    "test:unit": "node --test tests/test-ai-flow.js tests/test-confirm-modal.js tests/test-day-brief.js tests/test-file-perms.js tests/test-focus-glycemic.js tests/test-hub-meal.js tests/test-import.js tests/test-main-loadguard.js tests/test-meal-type.js tests/test-muscle-endurance.js tests/test-muscle-progress.js tests/test-nutrition-advice.js tests/test-photo-library.js tests/test-plan-importer.js tests/test-plan-parse-ai.js tests/test-plan-text.js tests/test-post-meal-timing.js tests/test-progression.js tests/test-progression-ui.js tests/test-progress-visual.js tests/test-rhythm.js tests/test-scoring-v2.js tests/test-sleep-advice.js tests/test-skin-engine.js tests/test-skin-render.js tests/test-skin-knowledge.js tests/test-strength.js tests/test-timer-flow.js tests/test-timer-ui-module.js tests/test-trends.js tests/test-app-identity.js tests/test-video-collections.js tests/test-video-link-parse.js tests/test-douyin-local.js tests/test-session-await.js tests/test-views-render.js tests/test-routine.js tests/test-secure-key-startup.js tests/test-soft-controls.js tests/test-daily-plan.js tests/test-video-slots.js tests/test-platform.js tests/test-hub-photo.js tests/test-restore-keeps-unpacked-videos.js",
+    "test:unit": "node --test tests/test-ai-flow.js tests/test-confirm-modal.js tests/test-day-brief.js tests/test-file-perms.js tests/test-focus-glycemic.js tests/test-hub-meal.js tests/test-import.js tests/test-main-loadguard.js tests/test-meal-type.js tests/test-muscle-endurance.js tests/test-muscle-progress.js tests/test-nutrition-advice.js tests/test-photo-library.js tests/test-plan-importer.js tests/test-plan-parse-ai.js tests/test-plan-text.js tests/test-post-meal-timing.js tests/test-progression.js tests/test-progression-ui.js tests/test-progress-visual.js tests/test-rhythm.js tests/test-scoring-v2.js tests/test-sleep-advice.js tests/test-skin-engine.js tests/test-skin-render.js tests/test-skin-knowledge.js tests/test-strength.js tests/test-timer-flow.js tests/test-timer-ui-module.js tests/test-trends.js tests/test-app-identity.js tests/test-video-collections.js tests/test-video-link-parse.js tests/test-douyin-local.js tests/test-session-await.js tests/test-views-render.js tests/test-routine.js tests/test-secure-key-startup.js tests/test-soft-controls.js tests/test-daily-plan.js tests/test-video-slots.js tests/test-platform.js tests/test-hub-photo.js tests/test-restore-keeps-unpacked-videos.js tests/test-skincare-video-store.js tests/test-skincare-recorder.js tests/test-fixed-practice.js tests/test-life-media.js",
     "test:ux20": "node --test tests/test-ux20.js && electron tests/test-ux20-ui.js && node tests/run-ux20-media.js",
     "test:media": "electron tests/test-media-sync-ui.js",
     "test:strength-ui": "node tests/run-strength-ui.js",

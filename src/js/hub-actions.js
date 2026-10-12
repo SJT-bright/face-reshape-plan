@@ -126,13 +126,15 @@
       const skinPhotos=Store.db.skin.photos || [];
       const existing=[...mealPhotos,...skinPhotos].find(p=>p.sourceKey===photo.sourceKey);
       if(existing && existing.sha256!==photo.sha256)return {ok:false,conflict:true,error:'原始照片摘要发生变化，请先核对'};
-      if(existing && ['sourceRevision','kind','file','sha256','local','sentAt','timeKind','note','mealSourceKey'].every(key=>
-          existing[key]===(key==='sourceRevision' ? photo.revision : photo[key])))return {...receipt,alreadyDone:true};
+      if(existing && ['sourceRevision','kind','file','sha256','local','sentAt','timeKind','note','mealSourceKey','mealLabel','archiveRelativePath','trainingSourceKey','date'].every(key=>
+          existing[key]===(key==='sourceRevision' ? photo.revision : key==='date' ? photo.trainingDate || photo.local.slice(0,10) : photo[key])))return {...receipt,alreadyDone:true};
       const record={...existing,id:existing?.id || 'wx-photo-'+photo.sourceKey.slice(0,24),
         source:'weixin-life-diary',sourceKey:photo.sourceKey,sourceRevision:photo.revision,
         kind:photo.kind,file:photo.file,sha256:photo.sha256,mime:photo.mime,
         local:photo.local,at:photo.at,sentAt:photo.sentAt,timeKind:photo.timeKind,
-        date:photo.local.slice(0,10),note:photo.note,mealSourceKey:photo.mealSourceKey,
+        date:photo.trainingDate || photo.local.slice(0,10),note:photo.note,mealSourceKey:photo.mealSourceKey,
+        mealLabel:photo.mealLabel,archiveRelativePath:photo.archiveRelativePath,
+        trainingSourceKey:photo.trainingSourceKey,
         angle:existing?.angle || 'unknown',createdAt:photo.sentAt};
       Store.db.rhythm.mealPhotos=mealPhotos.filter(p=>p.sourceKey!==photo.sourceKey);
       Store.db.skin.photos=skinPhotos.filter(p=>p.sourceKey!==photo.sourceKey);
@@ -148,7 +150,79 @@
     }
   }
 
+  function importVideo(video){
+    if(!video || !/^[a-f0-9]{64}$/.test(video.sourceKey || '') || !Number.isSafeInteger(video.revision) || video.revision<1 ||
+       !['meal','skin','body'].includes(video.kind) || !RhythmEngine.parse(video.local) || !/^wx-[a-f0-9]{64}\.(mp4|mov|webm)$/.test(video.file || '') ||
+       !/^[a-f0-9]{64}$/.test(video.sha256 || '') || !Number.isSafeInteger(video.bytes) || video.bytes<=0 || video.bytes>200*1024*1024)return {ok:false,error:'视频记录无效'};
+    const known=Store.db.videoImportVersions?.[video.sourceKey];
+    if(known?.state==='manual-deleted')return {ok:false,conflict:true,error:'视频已在应用内删除'};
+    const receipt={ok:true,sourceKey:video.sourceKey,revision:video.revision,sha256:video.sha256,kind:video.kind,file:video.file};
+    if(known?.revision>video.revision)return {...receipt,stale:true};
+    const before={lifeVideos:structuredClone(Store.db.lifeVideos),videoImportVersions:structuredClone(Store.db.videoImportVersions)};
+    const existing=(Store.db.lifeVideos || []).find(v=>v.sourceKey===video.sourceKey);
+    if(existing && existing.sha256!==video.sha256)return {ok:false,conflict:true,error:'原视频摘要冲突'};
+    if(existing && known?.revision===video.revision)return {...receipt,alreadyDone:true};
+    try{
+      Store.db.lifeVideos=(Store.db.lifeVideos || []).filter(v=>v.sourceKey!==video.sourceKey);
+      Store.db.lifeVideos.push({...video,id:existing?.id || 'wx-video-'+video.sourceKey.slice(0,24),sourceRevision:video.revision,source:'weixin-life-diary',date:video.trainingDate || video.local.slice(0,10)});
+      Store.db.videoImportVersions=Store.db.videoImportVersions || {};Store.db.videoImportVersions[video.sourceKey]={revision:video.revision,state:'active',kind:video.kind};
+      Store.save(true);return receipt;
+    }catch{Store.db.lifeVideos=before.lifeVideos;Store.db.videoImportVersions=before.videoImportVersions;return {ok:false,retryable:true,error:'视频记录暂时无法保存'};}
+  }
+
   /* ---------- 力量训练 ---------- */
+  const PARTS=[['chest',/胸|推胸|chest|pector/i],['triceps',/(?:肱)?三头(?:肌)?|三頭|triceps/i],
+    ['biceps',/(?:肱)?二头(?:肌)?|二頭|biceps/i],['back',/背|back/],
+    ['shoulders',/肩|三角肌|shoulder|deltoid/i],['legs',/腿|下肢|股四头|股二头|leg|quads|hamstring/i],
+    ['glutes',/臀|glutes/i],['core',/腹|核心|腰腹|abs|core/i],['forearms',/小臂|前臂|forearm/i]];
+  const cleanTraining=s=>String(s || '').normalize('NFKC').toLowerCase().replace(/还有|以及|和|跟|加|与|及|[\s＋+、，,·（）()]/g,'');
+  const actionNames=s=>cleanTraining(s).replace(/平板哑铃卧推|哑铃平板卧推|哑铃推胸/g,'哑铃卧推')
+    .replace(/上斜哑铃卧推/g,'上斜卧推').replace(/凳上臂屈伸|凳子臂屈伸/g,'凳上反屈伸')
+    .replace(/哑铃颈后臂屈伸/g,'单臂颈后臂屈伸');
+  const parts=s=>new Set(PARTS.filter(([,pattern])=>pattern.test(s)).map(([key])=>key));
+  function matchWorkout(workout){
+    // Same active template as todayPlan. Old inactive templates cannot win a
+    // keyword tie and silently divert the owner to a superseded plan.
+    const strength=Store.db.strength || {};
+    const template=(strength.templates || []).filter(t=>strength.cycle?.[t.id])
+      .sort((a,b)=>(strength.cycle[b.id].updatedAt || '').localeCompare(strength.cycle[a.id].updatedAt || ''))[0];
+    if(!template)return {status:'unmatched',candidates:[]};
+    const version=template.versions.find(v=>v.revision===template.currentRevision);
+    const raw=cleanTraining(workout.description),asked=parts(raw);
+    const ranked=(version?.days || []).filter(d=>!d.isRest).map(day=>{
+      const heading=cleanTraining(day.name+' '+(day.bodyPart || ''));
+      const planned=parts(heading);
+      const overlap=[...asked].filter(p=>planned.has(p)).length;
+      const muscle=asked.size && planned.size ? .65*overlap/asked.size+.35*overlap/planned.size : 0;
+      const actionRaw=actionNames(workout.description);
+      const actionHits=(day.actions || []).filter(a=>actionRaw.includes(actionNames(a.name)) || actionNames(a.name).includes(actionRaw)).length;
+      const score=heading.includes(raw) || raw.includes(heading) ? 1 : actionHits ? Math.max(muscle*.85,.95) : muscle*.85;
+      return {templateId:template.id,templateRevision:version.revision,templateName:template.name,dayKey:day.dayKey,dayName:day.name,score};
+    }).filter(d=>d.score>0).sort((a,b)=>b.score-a.score);
+    if(!ranked.length || ranked[0].score<.65)return {status:'unmatched',candidates:ranked.slice(0,3)};
+    if(ranked[1] && Math.abs(ranked[0].score-ranked[1].score)<.001)return {status:'ambiguous',candidates:ranked.slice(0,3)};
+    return {status:'matched',...ranked[0],candidates:ranked.slice(0,3)};
+  }
+
+  function importWorkout(workout){
+    if(!workout || !/^[a-f0-9]{64}$/.test(workout.sourceKey || '') || !Number.isSafeInteger(workout.revision) || workout.revision<1 ||
+       !/^20\d{2}-\d{2}-\d{2}$/.test(workout.date || '') || !RhythmEngine.parse(workout.date+'T00:00') ||
+       typeof workout.description!=='string' || !workout.description.trim() || workout.description.length>180 ||
+       typeof workout.rawText!=='string' || workout.rawText.length>500 || !['active','cancelled'].includes(workout.state))return {ok:false,error:'训练字段无效'};
+    const previous=structuredClone(Store.db.workoutImports);
+    const records=Store.db.workoutImports || {};
+    const known=records[workout.sourceKey];
+    if(known?.manualOverride)return {ok:false,conflict:true,error:'训练已在应用内修改，请先核对'};
+    if(known && known.revision>=workout.revision)return {ok:true,sourceKey:workout.sourceKey,revision:workout.revision,match:known.match,alreadyDone:true};
+    const match=workout.state==='cancelled'?{status:'cancelled'}:matchWorkout(workout);
+    try{
+      const history=[...(known?.history || []),...(known ? [{revision:known.revision,date:known.date,description:known.description,state:known.state,match:known.match}] : [])];
+      records[workout.sourceKey]={...workout,match,history};Store.db.workoutImports=records;
+      Store.save(true);
+      return {ok:true,sourceKey:workout.sourceKey,revision:workout.revision,match};
+    }catch{Store.db.workoutImports=previous;return {ok:false,retryable:true,error:'训练记录暂时无法保存，稍后重试'};}
+  }
+
   function strengthContext() {
     const state = Core.normalize(Store.db);
     const date = todayKey();
@@ -281,6 +355,8 @@
     try {
       if (op === 'meal-import') return importMeal(payload.meal);
       if (op === 'photo-import') return importPhoto(payload.photo);
+      if (op === 'video-import') return importVideo(payload.video);
+      if (op === 'workout-import') return importWorkout(payload.workout);
       if (op === 'skip-today') {
         if (id !== 'strength') return { ok: false, error: 'skip-today 仅支持力量训练（id: strength）' };
         return doSkipStrength();
