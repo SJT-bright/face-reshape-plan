@@ -1,0 +1,13 @@
+.follow-mirror-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin:0 0 12px;flex-wrap:wrap}
+.follow-mirror-toolbar span{font-size:12px;color:var(--muted,#62708a)}
+#follow-mirror{position:fixed;z-index:115;width:clamp(190px,24vw,270px);max-width:calc(100vw - 16px);padding:10px;border:1px solid #8d9bb54d;border-radius:18px;background:#f8fafc;color:#26334a;box-shadow:0 12px 38px #15294133;contain:layout}
+#follow-mirror header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+#follow-mirror-handle{flex:1;cursor:grab;touch-action:none;user-select:none;font-size:13px;line-height:1.5;outline-offset:3px}
+#follow-mirror-handle span{display:block;color:var(--muted,#62708a);font-size:10px;font-weight:400}
+#follow-mirror.dragging #follow-mirror-handle{cursor:grabbing}
+#follow-mirror .btn{padding:5px 9px;font-size:12px;min-height:30px;white-space:nowrap}
+#follow-mirror-preview{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#182134;border-radius:12px;transform:scaleX(-1);pointer-events:none}
+#follow-mirror-status{font-size:11px;line-height:1.5;margin:8px 2px 0;color:var(--muted,#62708a)}
+#follow-mirror-retry{margin-top:8px}
+html.dark #follow-mirror{background:#252a3a;color:#eef2fb;border-color:#68769580}
+@media(max-width:1050px){#follow-mirror{width:220px}.follow-mirror-toolbar span{max-width:260px}}

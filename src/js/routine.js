@@ -171,7 +171,10 @@ const Routine = {
         UX.collectionPeriod = 'all';
         App.launchFollow(video.id, session?.id || null, { autoplay: true });
         document.body.classList.add('routine-running'); this.drawFlow();
-        if (this.active.camera) CareCamera.start();
+        if (this.active.camera) {
+          if (Store.currentMode() === 'face' && typeof FollowMirror !== 'undefined') FollowMirror.start();
+          else CareCamera.start();
+        }
       }
       return true;
     } catch (error) { await this.close(); toast('自动流程未能启动：' + error.message, 'red'); return false; }
@@ -223,6 +226,7 @@ const Routine = {
   },
   async close() {
     const active = this.active; this.active = null;
+    if (typeof FollowMirror !== 'undefined') FollowMirror.stop();
     if (active?.stage === 'training' && Session.active?.videoId === active.videoId) { Bilibili.MediaSync.pauseAll(); Session.stop(); }
     CareCamera.stop(); $('#routine-flow')?.remove(); document.body.classList.remove('routine-running');
     if (active && !active.wasFullscreen) await native.setFullscreen(false);

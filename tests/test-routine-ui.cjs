@@ -19,12 +19,13 @@ if(!process.versions.electron){
   app.on('browser-window-created',(_,win)=>{
     if(started)return;started=true;
     win.webContents.once('did-finish-load',async()=>{
-      const js=expression=>win.webContents.executeJavaScript(expression,true),pause=ms=>new Promise(r=>setTimeout(r,ms));
+      const js=async expression=>{try{return await win.webContents.executeJavaScript(expression,true);}catch(error){console.error('Failed expression:',expression);throw error;}},pause=ms=>new Promise(r=>setTimeout(r,ms));
       const wait=async(expr,limit=20000)=>{const deadline=Date.now()+limit;while(Date.now()<deadline){if(await js(expr))return;await pause(80);}throw Error('Timed out: '+expr);};
       const click=async(selector)=>{await pause(200);const point=await js(`(()=>{const b=document.querySelector(${JSON.stringify(selector)});if(!b)throw Error('Missing '+${JSON.stringify(selector)});b.scrollIntoView({block:'center',behavior:'instant'});const r=b.getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()`);win.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...point});win.webContents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,...point});await pause(150);};
       const shot=async name=>{await pause(450);fs.writeFileSync(path.join(evidence,name+'.png'),(await win.webContents.capturePage()).toPNG());};
       try{
         await wait("typeof Routine!=='undefined' && !!document.querySelector('#ux-now')");
+        await js("Store.addVideo({id:'awakening-fixture',source:'local',title:'合成认知视频',localPath:Store.db.videos[0].localPath,durationSec:5},'awakening');Store.addVideo({id:'night-fixture',source:'local',title:'合成夜间视频',localPath:Store.db.videos[0].localPath,durationSec:5},'night');Store.save(true);");
         assert.equal(await js("!!document.querySelector('#sidebar #add-video-collection')"),false);
         await click('[data-collection-id="night"]');assert.equal(await js('Store.currentMode()'),'night');assert.equal(await js("document.querySelectorAll('[data-watch-period]').length"),1);
         await js("App.goCollection('awakening')");
@@ -40,9 +41,10 @@ if(!process.versions.electron){
         await click('#ux-tab-automation');
         await js(`(()=>{const f=document.querySelector('#routine-settings');f.elements.enabled.checked=true;f.elements['evening-time'].value=${JSON.stringify(new Date().toTimeString().slice(0,5))};f.elements['evening-video'].value='test-v';f.requestSubmit();})()`);
         await wait("Store.settings().automation?.enabled && !!Routine.active",25000);
-        await wait("Session.active?.running===true && document.querySelector('#stage video')?.currentTime>0 && !!CareCamera.stream");
-        await wait("document.querySelector('#camera-preview').videoWidth>0");
-        assert.equal(await js("document.querySelector('#camera-preview').paused"),false);
+        await wait("Session.active?.running===true && document.querySelector('#stage video')?.currentTime>0 && !!FollowMirror.stream");
+        await wait("document.querySelector('#follow-mirror-preview').videoWidth>0");
+        assert.equal(await js("document.querySelector('#follow-mirror-preview').paused"),false);
+        assert.equal(await js("!!document.querySelector('#camera-capture')"),false,'Training mirror has no capture or recording controls');
         await shot('training-camera');
         await wait("Routine.active?.stage==='snapshot' && Session.active===null",15000);
         assert.equal(await js("document.querySelector('#camera-preview').paused"),false,'Training pause must not pause camera');assert.match(await js("document.querySelector('#ux-care-now h3').textContent"),/晚间/);
