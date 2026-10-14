@@ -1,4 +1,4 @@
-人生重塑计划 1.8.8 提供 macOS / Windows 共用的 MIT 开源源码。
+人生重塑计划 1.8.9 提供 macOS / Windows 共用的 MIT 开源源码。
 
 - 瘦脸跟练增加可拖动的动作对照镜像小窗，实时看自己跟练。
 - 睡眠时长蓝线增加等距小时刻度与 7 小时目标，另绘制橙色时长评分虚线；每日时长、分数与相邻差值明确显示。评分为实际分钟 / 420 × 100，最高 100 分，原手填自评分保留。
@@ -10,4 +10,4 @@
 
 本地转写与清稿需已有 FunASR Python/模型、FFmpeg、Ollama qwen3:14b；每日复盘写入需个人积累库服务。安装包不附带这些模型和运行环境，缺少依赖会显示具体错误，不切换到云端语音识别。macOS 已用合成中文视频跑通真实本地 ASR、模型清稿、隔离复盘 API 与界面交互；真实摄像头/麦克风设备与 Windows 本地模型运行需在相应机器上确认。
 
-[Windows 使用说明](https://github.com/SJT-bright/face-reshape-plan/blob/v1.8.8/WINDOWS-%E4%BD%BF%E7%94%A8%E8%AF%B4%E6%98%8E.md)
+[Windows 使用说明](https://github.com/SJT-bright/face-reshape-plan/blob/v1.8.9/WINDOWS-%E4%BD%BF%E7%94%A8%E8%AF%B4%E6%98%8E.md)

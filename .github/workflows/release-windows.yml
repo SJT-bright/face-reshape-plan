@@ -33,7 +33,8 @@ jobs:
       - run: node tests/test-windows-default-data.cjs
       - run: npm run test:video-collections
       - run: npm run test:soft-ui
-      - run: npm run test:capture-ui
+      - run: npm run test:sleep-chart-ui
+      - run: npm run test:camera-reminder-ui
       - run: npm run dist:win
       - name: Launch the packaged Windows executable
         run: npm run test:release -- "dist/win-unpacked/人生重塑计划.exe"
