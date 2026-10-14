@@ -1,7 +1,7 @@
 // Run the actual packaged executable twice with a disposable profile. All media is synthetic.
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
 const assert = require('node:assert/strict'), crypto = require('node:crypto');
-const { spawn } = require('node:child_process');
+const { spawn, execFileSync } = require('node:child_process');
 const { chromium } = require('playwright-core');
 const asar = require('@electron/asar');
 const root = path.resolve(__dirname, '..');
@@ -47,7 +47,13 @@ async function stop() {
   if (browser) { await browser.close(); browser = null; }
   if (!child || child.exitCode !== null) return;
   const active = child;
-  await new Promise(resolve => { active.once('exit', resolve); active.kill(); });
+  await new Promise(resolve => {
+    active.once('exit', resolve);
+    if(process.platform==='win32'){
+      try{execFileSync('taskkill',['/PID',String(active.pid),'/T','/F'],{stdio:'ignore',timeout:10000});}
+      catch{active.kill();}
+    }else active.kill();
+  });
   child = null;
 }
 async function main() {
@@ -119,5 +125,5 @@ async function main() {
   console.log('PACKAGED_RELEASE_PASS ' + JSON.stringify(report));
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
-  await stop(); fs.rmSync(profile, { recursive: true, force: true });
+  await stop(); fs.rmSync(profile, { recursive: true, force: true, maxRetries:10, retryDelay:250 });
 });
