@@ -79,7 +79,10 @@ async function main(){
   await page.waitForFunction(()=>HabitRemindersUI.state.configs.find(c=>c.id==='water')?.snoozed);
   const snoozed=await page.evaluate(()=>HabitRemindersUI.state.configs.find(c=>c.id==='water'));assert.equal(snoozed.todayCount,0);assert.equal(snoozed.nextDueAt,due+1+300000);
   await app.evaluate((_,now)=>{globalThis.__testHabitNow=now;},snoozed.nextDueAt-1);await page.waitForTimeout(1100);assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.getTitle()==='生活提醒').isVisible()),false);
-  await app.evaluate((_,now)=>{globalThis.__testHabitNow=now;},snoozed.nextDueAt+1);await popup.locator('#habit-popup-complete').waitFor({state:'visible'});await popup.locator('#habit-popup-complete').click();
+  await app.evaluate((_,now)=>{globalThis.__testHabitNow=now;},snoozed.nextDueAt+1);
+  await page.waitForFunction(()=>HabitRemindersUI.state.active?.reminderId==='water' && !HabitRemindersUI.state.configs.find(c=>c.id==='water')?.snoozed);
+  for(let i=0;i<30;i++){if(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.getTitle()==='生活提醒').isVisible()))break;await page.waitForTimeout(100);}
+  await popup.locator('#habit-popup-complete').click();
   await page.waitForFunction(()=>HabitRemindersUI.state.configs.find(c=>c.id==='water')?.todayCount===1);
   await page.evaluate(()=>Store.save(true));assert.equal(Object.keys(JSON.parse(fs.readFileSync(dataFile)).habitReminders.completions).length,1,'Old renderer saves preserve new completion');
   await page.locator('#habit-reminders-settings').screenshot({path:path.join(evidence,'habit-settings.png')});

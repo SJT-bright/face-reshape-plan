@@ -8,8 +8,9 @@ test('training starts at original plan; increases and reductions become defaults
   const db={},state=Core.normalize(db),action={actionKey:'a',name:'卧推',plannedSets:3,plannedRepsText:'10-12',plannedWeightText:'20kg',setsDone:null,repsText:'',weightKg:null};
   assert.deepEqual(Core.trainingBaseline(state,action,'2026-10-08'),{setsDone:3,repsText:'10-12',weightKg:20,sets:undefined,source:'plan'});
   state.days['2026-10-08']={date:'2026-10-08',status:'in-progress',revision:1,actions:[action]};
-  assert.equal(Core.saveTraining(state,{date:'2026-10-08',actions:[{actionKey:'a',setsDone:3,repsText:'13',weightKg:21}]}).ok,true);
-  assert.equal(Core.saveTraining(state,{date:'2026-10-08',actions:[{actionKey:'a',setsDone:2,repsText:'11',weightKg:19}]}).ok,true);
+  const sameInstant=new Date('2026-10-08T18:00:00.000Z');
+  assert.equal(Core.saveTraining(state,{date:'2026-10-08',actions:[{actionKey:'a',setsDone:3,repsText:'13',weightKg:21}]},sameInstant).ok,true);
+  assert.equal(Core.saveTraining(state,{date:'2026-10-08',actions:[{actionKey:'a',setsDone:2,repsText:'11',weightKg:19}]},sameInstant).ok,true);
   assert.equal(state.adjustments.length,2);
   assert.equal(state.adjustments[1].before.repsText,'13');
   assert.equal(state.adjustments[1].after.repsText,'11');
@@ -19,6 +20,8 @@ test('training starts at original plan; increases and reductions become defaults
   assert.equal(Core.trainingBaseline(reload,action,'2026-10-09').weightKg,19);
   assert.equal(Core.trainingBaseline(reload,action,'2026-10-07').source,'plan');
   const restored=Core.normalize({});assert.equal(Core.importFrom(restored,JSON.parse(JSON.stringify(reload))).ok,true);assert.equal(restored.adjustments.length,2);assert.equal(Core.trainingBaseline(restored,action,'2026-10-09').weightKg,19);
+  const olderOnly=JSON.parse(JSON.stringify(reload));olderOnly.adjustments=olderOnly.adjustments.slice(0,1);
+  assert.equal(Core.importFrom(restored,olderOnly).ok,true);assert.equal(Core.trainingBaseline(restored,action,'2026-10-09').weightKg,19);
   const invalid=JSON.parse(JSON.stringify(reload));invalid.adjustments[0].after.weightKg=-1;const original=JSON.stringify(restored);assert.equal(Core.importFrom(restored,invalid).ok,false);assert.equal(JSON.stringify(restored),original);
 });
 

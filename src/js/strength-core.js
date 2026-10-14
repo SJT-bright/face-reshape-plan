@@ -1788,9 +1788,11 @@
     state.progress.push(...cleaned.progress);
     state.adjustments||=[];state.baselines||={};
     for(const x of cleaned.adjustments||[]){
-      if(!state.adjustments.some(v=>v.id===x.id))state.adjustments.push(x);
+      const isNew=!state.adjustments.some(v=>v.id===x.id);
+      if(isNew)state.adjustments.push(x);
       const key=actionNameKey(x.name),previous=state.baselines[key];
-      if(!previous||previous.savedAt<x.savedAt)state.baselines[key]={...x.after,date:x.date,savedAt:x.savedAt};
+      // 同一毫秒内的连续确认以追加顺序为准；重复导入旧事件不能倒退基线。
+      if(!previous||previous.savedAt<x.savedAt||isNew&&previous.savedAt===x.savedAt)state.baselines[key]={...x.after,date:x.date,savedAt:x.savedAt};
     }
     if (cleaned.bmiProfile) state.bmiProfile = cleaned.bmiProfile; // 身体档案随导入恢复
     return { ok: true, templates, days };

@@ -4,7 +4,7 @@
 
 一个本地优先的桌面生活记录工具，把认知唤醒、视频跟练、力量训练、护肤、饮食与睡眠放在同一个工作台里。视频按独立板块收藏，既可以保留原有瘦脸护理，也可以导入晨间励志、晚间复盘视频，并创建自己命名的收藏夹。使用 Electron 构建，以半透明界面和生成的 3D 图标呈现每日计划与长期进步。
 
-当前源码版本：**1.8.7**。支持 **macOS 13+** 与 **Windows 10 / 11 x64**。安装包与源码见 [发布页](https://github.com/SJT-bright/face-reshape-plan/releases/tag/v1.8.7)，运行与构建步骤见 [Windows 使用说明](WINDOWS-使用说明.md)。两个平台使用同一套 MIT 开源源码。
+当前源码版本：**1.8.8**。支持 **macOS 13+** 与 **Windows 10 / 11 x64**。安装包与源码见 [发布页](https://github.com/SJT-bright/face-reshape-plan/releases/tag/v1.8.8)，运行与构建步骤见 [Windows 使用说明](WINDOWS-使用说明.md)。两个平台使用同一套 MIT 开源源码。
 
 ## 功能
 

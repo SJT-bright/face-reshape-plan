@@ -133,7 +133,7 @@ test('../、绝对路径、错误后缀和符号链接被拒绝，且不写出�
     assert.equal(store.appendChunk(dir, linkName, payload), null);
     assert.equal(store.finishFile(dir, linkName), null);
     assert.equal(fs.readFileSync(secret, 'utf8'), 'SECRET');
-    assert.equal(fs.statSync(secret).mode & 0o777, 0o644);
+    if (process.platform !== 'win32') assert.equal(fs.statSync(secret).mode & 0o777, 0o644);
     assert.equal(fs.lstatSync(path.join(dir, linkName)).isSymbolicLink(), true);
     assert.equal(fs.existsSync(path.join(parent, outsideName)), false);
     assert.deepEqual(fs.readdirSync(parent).sort(), ['clips', 'secret.webm']);
@@ -189,7 +189,7 @@ test('追加后超过 2GB 的块被拒绝，恰好到达上限可以写入', () 
     assert.equal(store.appendChunk(dir, created.file, Buffer.from('Y')), null);
     assert.equal(fs.statSync(full).size, store.MAX_BYTES);
     assert.equal(readAt(full, 0, 2).toString(), 'hi');
-    assert.equal(fs.statSync(full).mode & 0o777, 0o600);
+    if (process.platform !== 'win32') assert.equal(fs.statSync(full).mode & 0o777, 0o600);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
