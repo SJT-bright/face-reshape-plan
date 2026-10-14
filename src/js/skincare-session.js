@@ -22,12 +22,24 @@
     askSettings: false,
     listGen: 0,
     early: [],
-    arming: false
+    arming: false,
+    phase: null,
+    audioRecorded: false,
+    phaseDay: ''
   };
 
   const SkincareSession = {
+    get recording() { return session.mode === 'recording' || session.starting || session.stopping; },
+    get phase() { return session.phase; },
+    async start(options = {}) {
+      if (!this.recording) { session.phase = ['morning','day','evening'].includes(options.phase) ? options.phase : phaseKey(new Date().getHours()); session.phaseDay = new Date().toDateString(); }
+      return startRecording();
+    },
+    stop: () => endRecording(),
+    refreshVideos: () => refreshList(),
     mount(el) {
       if (!el) return;
+      if (!this.recording && session.phaseDay !== new Date().toDateString()) session.phase = null;
       session.el = el;
       if (session.mode === 'recording' && session.stream) {
         paintRecording();
@@ -79,7 +91,7 @@
     let steps = [];
     try {
       const cycle = typeof Store !== 'undefined' && Store.activeCycle ? Store.activeCycle() : null;
-      const list = cycle && cycle.steps ? cycle.steps[phaseKey(new Date().getHours())] : null;
+      const list = cycle && cycle.steps ? cycle.steps[session.phase || phaseKey(new Date().getHours())] : null;
       if (Array.isArray(list)) steps = list;
     } catch { steps = []; }
     return steps;
@@ -102,10 +114,11 @@
     const el = session.el;
     if (!el) return;
     const note = session.notice ? `<p class="hint" id="sk-session-note" role="status">${h(session.notice)}</p>` : '';
-    const label = session.askSettings ? '打开摄像头权限' : '开始护肤';
+    const label = session.askSettings === 'microphone' ? '打开麦克风权限' : session.askSettings ? '打开摄像头权限' : '开始护肤';
     el.innerHTML = `<div class="card">
       <h3>开始护肤</h3>
-      <p class="hint">对着电脑。点下去就打开摄像头，并自动开始录。录像写进「护肤视频」文件夹。</p>
+      <p class="hint">点开始后打开摄像头并录制到本机「护肤视频」文件夹。晚间同时录入麦克风声音，结束后可右键视频“转文字并存入复盘”。</p>
+      <label class="sk-record-phase">护肤时段<select id="sk-record-phase"><option value="morning">晨间</option><option value="day">日间</option><option value="evening">晚间 · 记录语音复盘</option></select></label>
       ${note}
       <button type="button" id="sk-start-record" class="btn primary sk-start">${label}</button>
       ${stepsHtml()}
@@ -114,7 +127,9 @@
       <button type="button" class="btn" id="sk-open-video-folder">打开护肤视频文件夹</button>
     </div>`;
     const button = q(el, '#sk-start-record');
-    if (button) button.onclick = () => { startRecording(); };
+    const phase = q(el, '#sk-record-phase');
+    if (phase) { phase.value = session.phase || phaseKey(new Date().getHours()); phase.onchange = () => { session.phase = phase.value; session.phaseDay = new Date().toDateString(); }; }
+    if (button) button.onclick = () => { SkincareSession.start({phase:phase?.value}); };
     const folder = q(el, '#sk-open-video-folder');
     if (folder) folder.onclick = () => {
       if (typeof native !== 'undefined' && typeof native.skincareVideoOpenFolder === 'function') native.skincareVideoOpenFolder();
@@ -132,7 +147,7 @@
     const shown = session.startedMs ? clockText(Date.now() - session.startedMs) : '00:00';
     el.innerHTML = `<div class="card">
       <video id="sk-record-preview" class="sk-record-preview" autoplay muted playsinline></video>
-      <p class="sk-record-status"><span class="sk-rec-dot" aria-hidden="true"></span><span>录制中</span><span id="sk-record-clock" class="sk-record-clock">${shown}</span></p>
+      <p class="sk-record-status"><span class="sk-rec-dot" aria-hidden="true"></span><span>${session.phase === 'evening' ? '晚间复盘 · 画面与声音录制中' : '护肤画面录制中'}</span><span id="sk-record-clock" class="sk-record-clock">${shown}</span></p>
       <button type="button" id="sk-stop-record" class="btn sk-stop">结束视频</button>
       ${stepsHtml()}
     </div>`;
@@ -182,6 +197,7 @@
 
   function cameraNotice(err) {
     const name = err && err.name;
+    if (name === 'MicrophonePermissionError') return err.message;
     if (name === 'NotAllowedError' || name === 'PermissionDeniedError') return '摄像头权限未开启';
     if (name === 'NotFoundError') return '没有找到摄像头';
     return '镜头没能打开';
@@ -243,7 +259,7 @@
     session.appendError = null;
     session.early = [];
     session.arming = false;
-    session.askSettings = !!keepSettings;
+    session.askSettings = keepSettings || false;
     session.notice = notice || '';
     if (session.el) await showIdle();
   }
@@ -256,7 +272,9 @@
       file: row.file,
       startedAt: row.startedAt,
       endedAt: row.endedAt,
-      ms: row.ms
+      ms: row.ms,
+      phase: row.phase,
+      audioRecorded: row.audioRecorded
     });
     Store.save(true);
   }
@@ -295,7 +313,8 @@
       live.innerHTML = '<p class="hint sk-video-empty">还没有护肤录像。点开始护肤，对着电脑做完，再点结束视频。</p>';
       return;
     }
-    live.innerHTML = items.map((item, index) => `<div class="sk-video-row"><video controls playsinline preload="metadata" data-i="${index}"></video><p class="hint">${h(baseName(item.file))}</p></div>`).join('');
+    live.innerHTML = items.map((item, index) => `<div class="sk-video-row" data-skincare-file="${h(item.file)}" data-record-phase="${h(item.phase || '')}"><video controls playsinline preload="metadata" data-i="${index}"></video><p class="hint">${h(baseName(item.file))}${item.phase === 'evening' ? ' · 晚间' : item.phase === 'morning' ? ' · 晨间' : item.phase === 'day' ? ' · 日间' : ''}</p>${item.phase === 'evening' ? '<button class="btn small" type="button" data-review-video>转文字并存入复盘</button><div data-review-status></div>' : ''}</div>`).join('');
+    if (typeof EveningReviewUI !== 'undefined') EveningReviewUI.bindVideos(live);
     await Promise.all(items.map((item, index) => attachUrl(live, item, index, gen)));
   }
 
@@ -309,10 +328,18 @@
         return null;
       }
     }
-    return navigator.mediaDevices.getUserMedia({
+    const evening = session.phase === 'evening';
+    if (evening && typeof native.microphonePermission === 'function') {
+      const permission = await native.microphonePermission();
+      if (!permission?.granted) throw Object.assign(Error('晚间语音复盘需要麦克风权限，请在系统设置中允许后重试'), {name:'MicrophonePermissionError'});
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false
+      audio: evening ? { echoCancellation:true, noiseSuppression:true } : false
     });
+    session.audioRecorded = stream.getAudioTracks().length > 0;
+    if (evening && !session.audioRecorded) { stream.getTracks().forEach(t => t.stop()); throw Error('没有可用的麦克风，晚间语音复盘尚未开始录制'); }
+    return stream;
   }
 
   function queueEarly() {
@@ -323,6 +350,7 @@
   async function startRecording() {
     if (session.starting || session.stopping || session.mode === 'recording') return;
     if (session.askSettings) {
+      if (session.askSettings === 'microphone' && typeof native.openMicrophoneSettings === 'function') { await native.openMicrophoneSettings(); session.askSettings = false; session.notice = '允许麦克风后，请再点开始护肤'; await showIdle(); return; }
       if (typeof native !== 'undefined' && typeof native.openCameraSettings === 'function') {
         try { await native.openCameraSettings(); } catch { session.notice = session.notice || '摄像头权限未开启'; }
       }
@@ -378,8 +406,8 @@
       }
     } catch (err) {
       const notice = cameraNotice(err);
-      const ask = notice === '摄像头权限未开启';
-      if (session.stream || session.recorder || session.mode === 'recording') await teardown(notice, ask);
+      const ask = err.name === 'MicrophonePermissionError' ? 'microphone' : notice === '摄像头权限未开启';
+      if (session.stream || session.recorder || session.mode === 'recording') { await teardown(notice, ask); session.askSettings = ask; }
       else {
         session.askSettings = ask;
         session.notice = notice;
@@ -425,7 +453,7 @@
       if (failed) session.notice = '录像没能保存';
       else {
         const endedAt = new Date().toISOString();
-        rememberVideo({ file, startedAt, endedAt, ms: Math.max(0, Date.now() - startedMs) });
+        rememberVideo({ file, startedAt, endedAt, ms: Math.max(0, Date.now() - startedMs), phase:session.phase, audioRecorded:session.audioRecorded });
         session.notice = '';
         if (typeof toast === 'function') toast('护肤视频已保存', 'green');
       }
@@ -451,6 +479,7 @@
       if (session.el) await showIdle();
     } finally {
       session.stopping = false;
+      document.dispatchEvent(new CustomEvent('skincare-recording-ended'));
     }
   }
 

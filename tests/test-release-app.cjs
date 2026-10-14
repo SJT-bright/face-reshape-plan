@@ -54,7 +54,7 @@ async function main() {
   fs.mkdirSync(evidence, { recursive: true });
   const pkg = JSON.parse(asar.extractFile(archive, 'package.json'));
   assert.equal(pkg.version, report.version);
-  const files = ['main.js', 'preload.js', ...fs.readdirSync(path.join(root, 'src/js')).filter(n => n.endsWith('.js')).map(n => 'src/js/' + n), 'src/index.html', 'src/ux.css'];
+  const files = ['main.js', 'preload.js', ...fs.readdirSync(path.join(root, 'src/js')).filter(n => /\.(?:js|cjs)$/.test(n)).map(n => 'src/js/' + n), ...fs.readdirSync(path.join(root,'src')).filter(n=>n.endsWith('.css')).map(n=>'src/'+n), 'src/index.html','src/habit-reminder-popup.html'];
   for (const name of files) assert.equal(hash(asar.extractFile(archive, path.normalize(name))), hash(fs.readFileSync(path.join(root, name))), name + ' matches source');
   const packaged = asar.listPackage(archive).map(name => name.replace(/\\/g, '/'));
   assert.equal(packaged.some(n => /(?:face-reshape-data\.json|ai-key\.enc|hub-meal-token|\.sqlite|\.frbackup|\/\.zcode\/)/.test(n)), false);
@@ -83,6 +83,18 @@ async function main() {
   await page.waitForFunction(() => Store.db.settings.dailyTargetMinutes === 21);
   assert.equal(JSON.parse(fs.readFileSync(dbFile)).settings.dailyTargetMinutes, 21);
   report.checks.push('seven routes, settings form and native IPC persistence');
+  await page.evaluate(()=>{Store.db.rhythm.sleeps=[{id:'sleep-a',kind:'main',durationOnly:true,startLocal:addDays(todayKey(),-1),endLocal:addDays(todayKey(),-1),recordedMinutes:390,qualityScore:95},{id:'sleep-b',kind:'main',durationOnly:true,startLocal:todayKey(),endLocal:todayKey(),recordedMinutes:330,qualityScore:95}];App.go('nutrition');});
+  assert.equal(await page.locator('.sleep-score-dot').count(),2);
+  assert.match(await page.locator('[data-sleep-latest]').innerText(),/评分低 14 分/);
+  assert.equal(await page.evaluate(()=>Rhythm.sleepQualitySummary().last.score),79);
+  await page.evaluate(()=>{UX.settingsPanel='reminders';App.go('settings');});
+  await page.locator('[data-habit-id="water"]').waitFor();
+  const water=page.locator('[data-habit-id="water"]');await water.locator('[data-field="intervalMinutes"]').fill('7');await water.locator('[data-habit-save]').click();
+  await page.waitForFunction(()=>HabitRemindersUI.state.configs.find(c=>c.id==='water').intervalMinutes===7);
+  assert.equal(await page.evaluate(async()=>{const r=await native.habitReminderState();return r.state.todayTotal;}),0);
+  await page.evaluate(()=>App.go('daily-review'));
+  assert.equal(await page.locator('#review-record-evening').count(),1);
+  report.checks.push('sleep hour chart and 93→79 score, custom habit configuration IPC, evening review route');
   await page.evaluate(() => { App.followVideoId = 'release-clip'; App.go('follow'); });
   await page.waitForFunction(() => document.querySelector('#stage video')?.readyState >= 2, {}, { timeout: 15000 });
   await page.evaluate(() => document.querySelector('#stage video').play());
@@ -99,6 +111,7 @@ async function main() {
   await stop(); page = await start();
   assert.equal(await page.evaluate(() => Store.db.settings.dailyTargetMinutes), 21);
   assert.equal(await page.evaluate(() => Store.db.videos[0].id), 'release-clip');
+  assert.equal(await page.evaluate(async()=>{const r=await native.habitReminderState();return r.state.configs.find(c=>c.id==='water').intervalMinutes;}),7);
   assert.deepEqual(fs.readFileSync(path.join(profile, 'skin-photos', saved)), png);
   report.checks.push('photo bytes saved, process restart restores records and media');
   report.archiveSha256 = hash(fs.readFileSync(archive));

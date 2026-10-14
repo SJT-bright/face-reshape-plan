@@ -210,7 +210,7 @@ const App = {
     }
     this.currentView = view;
     $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
-    $('#page-title').textContent = view === 'awakening' ? Store.currentCollection().name : view === 'today' ? Store.collectionById('face').name : view === 'follow' && Store.currentMode() !== 'face' ? Store.currentCollection().name + ' · 沉浸观看' : Views.titles[view] || view;
+    $('#page-title').textContent = view === 'daily-review' ? '晚间复盘' : view === 'awakening' ? Store.currentCollection().name : view === 'today' ? Store.collectionById('face').name : view === 'follow' && Store.currentMode() !== 'face' ? Store.currentCollection().name + ' · 沉浸观看' : Views.titles[view] || view;
     this.render();
   },
 
@@ -242,6 +242,7 @@ const App = {
       else if (v === 'strength') Strength.view(root);
       else if (v === 'skincare') Skincare.view(root);
       else if (v === 'nutrition') Rhythm.view(root);
+      else if (v === 'daily-review') EveningReviewUI.view(root);
       else if (v === 'achievements') Views.achievements(root);
     } catch (err) {
       console.error('[render]', v, err);

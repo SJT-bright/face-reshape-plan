@@ -19,6 +19,12 @@ const HubVideoStore = require('./src/js/hub-video-store');
 const makeKeyStore = require('./src/js/secure-key');
 const { videoPoster } = require('./src/js/video-poster');
 const SkincareVideoStore = require('./src/js/skincare-video-store');
+const { videoMetadata } = require('./src/js/evening-video-meta');
+const { createLocalVideoTranscriber } = require('./src/js/local-video-transcription');
+const { createEveningReviewPipeline, createLifepivotReviewAppender, createOllamaTranscriptCleaner } = require('./src/js/evening-review-pipeline');
+const HabitReminderCore = require('./src/js/habit-reminder-core');
+const { registerHabitReminders } = require('./src/js/habit-reminder-host.cjs');
+let habitRemindersHost;
 const Reminders = require('./src/js/reminders-v2');
 const keys = () => makeKeyStore(dataDir(), safeStorage);
 let pendingRestore = null;
@@ -64,6 +70,7 @@ function defaultData() {
     settings: {
       dailyTargetMinutes: 15,   // 每日瘦脸训练目标（分钟）
       eveningReviewTime: '22:00', // 晚间复盘提醒时间
+      timedFocusEnabled: true, // 用户启用的护肤/复盘到点大窗与计时。
       skinLogReminderTime: '21:30', // 皮肤状态记录提醒（当天未记录时推送；置空字符串关闭）
       sleepLogReminderTime: '12:00', // 睡眠记录提醒（当天还没记「昨晚睡眠」时中午推送；置空字符串关闭）
       keepInTray: true,          // 关闭窗口最小化到托盘（保持提醒）
@@ -135,6 +142,7 @@ function saveData(data, options) {
     const actions={...(db?.reminderActions||{}),...(next.reminderActions||{})};
     for(const [k,v]of Object.entries(db?.reminderActions||{}))if((v.updatedAt||0)>(actions[k]?.updatedAt||0))actions[k]=v;
     next.reminderActions=actions;
+    if (db?.habitReminders || next.habitReminders) next.habitReminders=HabitReminderCore.mergeState(db?.habitReminders,next.habitReminders);
     const tmp = dataFile() + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(next, null, 2), 'utf-8');
     fs.renameSync(tmp, dataFile());
@@ -541,7 +549,7 @@ function createWindow() {
   const cameraRequestAllowed = (wc, details = {}) => {
     const expected = require('url').pathToFileURL(path.join(__dirname, 'src', 'index.html')).href;
     const types = details.mediaTypes || (details.mediaType ? [details.mediaType] : []);
-    return wc === mainWindow?.webContents && (details.requestingUrl || wc?.getURL()) === expected && details.isMainFrame !== false && types.every(type => type === 'video');
+    return wc === mainWindow?.webContents && (details.requestingUrl || wc?.getURL()) === expected && details.isMainFrame !== false && types.every(type => type === 'video' || type === 'audio');
   };
   const permissionAllowed = (wc, permission, details = {}) => {
     if (permission === 'media') return cameraRequestAllowed(wc, details);
@@ -1198,6 +1206,17 @@ ipcMain.handle('app:isFullscreen', () => (mainWindow ? mainWindow.isFullScreen()
 function isAppFrame(event) {
   return !!mainWindow && event.sender === mainWindow.webContents && event.senderFrame === mainWindow.webContents.mainFrame;
 }
+let focusWindowState=null;
+ipcMain.handle('focus:enter', event => {
+  if (!isAppFrame(event)) return {ok:false};
+  focusWindowState ||= {fullscreen:mainWindow.isFullScreen(),alwaysOnTop:mainWindow.isAlwaysOnTop()};
+  showMainWindow();mainWindow.setAlwaysOnTop(true,'floating');mainWindow.setFullScreen(true);mainWindow.focus();
+  return {ok:true};
+});
+ipcMain.handle('focus:leave', event => {
+  if (!isAppFrame(event)) return false;
+  if(focusWindowState){mainWindow.setAlwaysOnTop(focusWindowState.alwaysOnTop);mainWindow.setFullScreen(focusWindowState.fullscreen);focusWindowState=null;}return true;
+});
 ipcMain.handle('routine:ready', event => { if (!isAppFrame(event)) return false; routineRendererReady = true; return true; });
 ipcMain.handle('routine:enter', event => {
   if (!isAppFrame(event)) return false;
@@ -1219,6 +1238,20 @@ ipcMain.handle('camera:settings', event => {
   if (process.platform === 'win32') return shell.openExternal('ms-settings:privacy-webcam');
   if (!isMac) return false;
   return shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Camera');
+});
+
+ipcMain.handle('camera:microphone', async event => {
+  if (!isAppFrame(event)) return { granted:false };
+  if (!isMac) return { granted:true, status:'request-in-browser' };
+  const status = systemPreferences.getMediaAccessStatus('microphone');
+  const granted = status === 'granted' || (status === 'not-determined' && await systemPreferences.askForMediaAccess('microphone'));
+  return { granted:!!granted, status:systemPreferences.getMediaAccessStatus('microphone') };
+});
+ipcMain.handle('camera:microphone-settings', event => {
+  if (!isAppFrame(event)) return false;
+  if (process.platform === 'win32') return shell.openExternal('ms-settings:privacy-microphone');
+  if (isMac) return shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+  return false;
 });
 
 ipcMain.handle('dialog:pickVideo', async () => {
@@ -1350,7 +1383,7 @@ ipcMain.handle('skinvideo:finish', (event, file) => {
 });
 ipcMain.handle('skinvideo:list', (event) => {
   if (!isAppFrame(event)) return [];
-  return SkincareVideoStore.listFiles(mediaDir('skinvideo'));
+  return SkincareVideoStore.listFiles(mediaDir('skinvideo')).map(row => ({...row,...videoMetadata(row.file,db.skin?.videos || [])}));
 });
 ipcMain.handle('skinvideo:url', (event, file) => {
   if (!isAppFrame(event)) return null;
@@ -1369,6 +1402,47 @@ ipcMain.handle('skinvideo:openFolder', async (event) => {
   const error = await shell.openPath(dir);
   return { path: dir, error: error || null, visible: !isolatedProfile() };
 });
+let eveningPipeline;
+const eveningRuns=new Map();
+function reviewPipeline() {
+  if (!eveningPipeline) {
+    const asr=createLocalVideoTranscriber({allowedRoots:[mediaDir('skinvideo')]});
+    eveningPipeline=createEveningReviewPipeline({jobsDir:path.join(dataDir(),'evening-review-jobs'),
+      transcribe:(file,options)=>asr.transcribeVideo(file,options),
+      cleanup:createOllamaTranscriptCleaner({model:process.env.FACE_REVIEW_MODEL || 'qwen3:14b'}),
+      sync:createLifepivotReviewAppender({endpoint:process.env.FACE_REVIEW_ENDPOINT || 'http://127.0.0.1:3216'})});
+  }
+  return eveningPipeline;
+}
+function reviewVideoSource(file) {
+  const meta=videoMetadata(file,db.skin?.videos || []);
+  const videoPath=SkincareVideoStore.resolveVideo(mediaDir('skinvideo'),file);
+  if (!meta || !videoPath) throw Error('没有找到这段护肤录像');
+  try {const stat=fs.lstatSync(videoPath);if(!stat.isFile()||stat.isSymbolicLink()||stat.size===0)throw Error('invalid');}catch{throw Error('这段护肤录像尚未保存完整或文件已不存在');}
+  if (meta.phase!=='evening') throw Error('只有晚间护肤录像可以转文字并存入复盘');
+  return {...meta,videoPath};
+}
+function visibleReviewJob(job) {
+  return {id:job.id,file:job.source.file,date:job.source.date,status:job.status,updatedAt:job.updatedAt,
+    raw:job.raw?{text:job.raw.text,segments:job.raw.segments}:null,cleaned:job.cleaned?{text:job.cleaned.text}:null,
+    error:job.error,receipt:job.receipt?{date:job.receipt.date,url:job.receipt.url}:null};
+}
+function runEveningReview(source) {
+  if(eveningRuns.has(source.file))return eveningRuns.get(source.file);
+  const running=reviewPipeline().run(source).finally(()=>eveningRuns.delete(source.file));
+  eveningRuns.set(source.file,running);return running;
+}
+ipcMain.handle('eveningreview:start',async(event,file)=>{
+  if(!isAppFrame(event))return {ok:false,error:'转写请求来源无效'};
+  try {const source=reviewVideoSource(String(file || ''));await reviewPipeline().getJob(source);void runEveningReview(source).catch(()=>{});return {ok:true};}
+  catch(error){return {ok:false,error:error.message};}
+});
+ipcMain.handle('eveningreview:list',event=>isAppFrame(event)?reviewPipeline().listJobs().map(visibleReviewJob):[]);
+ipcMain.handle('eveningreview:open',eventDateHandler);
+function eventDateHandler(event,date){
+  if(!isAppFrame(event)||!/^\d{4}-\d{2}-\d{2}$/.test(date || ''))return false;
+  return shell.openExternal('http://127.0.0.1:3216/daily-review?date='+encodeURIComponent(date));
+}
 ipcMain.handle('skinphoto:save', (_e, buf, ext, meta) => {
   const bytes = Buffer.from(buf || []);
   if (!bytes.length || bytes.length > 20 * 1024 * 1024) return null;
@@ -1563,6 +1637,13 @@ if (!gotLock) {
     loadData();
     migrateLegacyPhotos();
     createWindow();
+    habitRemindersHost=registerHabitReminders({BrowserWindow,ipcMain,getData:()=>db,saveData,isAppFrame,now:()=>Date.now(),
+      getSuspended:()=>db.settings?.remindersEnabled===false || Reminders.quiet(db.settings || {},new Date()) || powerMonitor.getSystemIdleState(1)==='locked',
+      onChanged:state=>sendToRenderer('habit:changed',state)});
+    void habitRemindersHost.tick();
+    for(const job of reviewPipeline().listJobs().filter(j=>!['completed','failed'].includes(j.status))) {
+      try{void runEveningReview(reviewVideoSource(job.source.file)).catch(()=>{});}catch{/* Missing recordings remain visible; no fabricated sync. */}
+    }
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       ...(isMac?[{role:'appMenu'}]:[]),{role:'editMenu'},
       {label:'导航与保存',submenu:[{label:'保存当前表单',accelerator:'CmdOrCtrl+S',click:()=>sendToRenderer('app:shortcut','s')},...['今日','跟练计划','力量训练','护肤','饮食与睡眠','成就'].map((label,i)=>({label,accelerator:`CmdOrCtrl+${i+1}`,click:()=>sendToRenderer('app:shortcut',String(i+1))}))]}, {role:'windowMenu'}
@@ -1578,7 +1659,7 @@ if (!gotLock) {
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); else showMainWindow(); });
   });
 
-  app.on('before-quit', () => { quitting = true; });
+  app.on('before-quit', () => { quitting = true; habitRemindersHost?.dispose(); });
 
   app.on('window-all-closed', () => {
     // 托盘常驻：不退出，除非用户选择退出（macOS 亦保持常驻以支持提醒）

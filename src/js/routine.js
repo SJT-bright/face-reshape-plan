@@ -240,6 +240,7 @@ const Routine = {
   },
   boot() {
     native.onRoutineActivate(payload => {
+      if (payload.focus && typeof TimedFocus !== 'undefined') { void TimedFocus.start(payload); return; }
       if (payload.kind === 'care' && this.active && this.active.period === payload.period) return;
       this.start(payload);
     });

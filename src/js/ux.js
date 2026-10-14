@@ -60,6 +60,7 @@ const UX = {
     this.sources();
     Drafts.bind($('#view-root'));
     SoftControls.bind($('#view-root'));
+    if(App.currentView==='today' && typeof HabitRemindersUI!=='undefined')void HabitRemindersUI.mountToday($('#view-root'));
   },
   collectionNav(){
     const box=$('#video-collections-nav');if(!box)return;
@@ -336,7 +337,7 @@ const UX = {
       const periodLabel=periodSlot?(periodSlot==='morning'?'早上':'晚上'):'今日';
       const fixed=watching&&video&&typeof FixedPracticeCore!=='undefined'&&FixedPracticeCore.isPinned(Store.db,mode,periodSlot,video.id);
       const clock=fixed?FixedPracticeCore.timeFor(Store.db,mode,periodSlot):'';
-      const status=resume?'上次未完成':fixed?(clock?`${periodLabel} ${clock} · 固定练`:`${periodLabel} · 固定练`):(!watching&&plan)?`今日安排 · ${plan.time}`:video.favorite?'已收藏':watching?'随时观看':'随时开练';
+      const status=resume?'上次未完成':fixed?(clock?`${periodLabel} ${clock} · 固定练`:`${periodLabel} · 固定练`):(!watching&&plan)?`今日安排 · ${plan.time}`:video?.favorite?'已收藏':watching?'随时观看':'随时开练';
       const note=video?[status,video.source==='local'?'本地视频':'B 站'].join(' · '):'支持 B 站 / 抖音链接或本地视频';
       /* 时段视图显示该时段自己的分账（早上/晚上），「全部」显示总数；瘦脸与观看板块各自取数 */
       const progSec=watching?Store.dayWatchingPeriod(todayKey(),periodSlot,mode):Store.dayTrainingPeriod(todayKey(),periodSlot);
@@ -449,6 +450,11 @@ const UX = {
     <div class="ux-set-foot"${['collections','automation'].includes(panel)?' hidden':''}><button class="btn primary ux-settings-save" type="submit" form="ux-settings-form">${icon('save')}保存设置</button></div>
     </div></div></div>`;
     if(typeof Routine!=='undefined')Routine.settings(root);
+    const focusOption=document.createElement('fieldset');focusOption.className='ux-set-cluster';
+    focusOption.innerHTML=`<legend>到点开始</legend><label class="ux-opt-row"><span>护肤与复盘到点全屏并开始计时</span><input type="checkbox" name="timedFocusEnabled"${s.timedFocusEnabled!==false?' checked':''}></label><p class="hint">按上方时间自动弹出大窗口。晚间护肤会录入画面和声音；正在录制的视频或正在进行的自动流程会先完成，再打开下一项。</p><button type="button" class="btn small" id="ux-preview-review">现在开始晚间复盘</button>`;
+    $('#ux-reminders',root).append(focusOption);
+    $('#ux-preview-review',root).onclick=()=>TimedFocus.start({id:todayKey()+'|review',date:todayKey(),kind:'review',title:'晚间复盘',focus:true});
+    if(typeof HabitRemindersUI!=='undefined')void HabitRemindersUI.mount(root);
     const f=$('#ux-settings-form',root);
     f.elements.dark.onchange=()=>document.documentElement.classList.toggle('dark',f.elements.dark.checked);
     f.onsubmit=e=>{e.preventDefault();if(!f.reportValidity()){const bad=f.querySelector(':invalid'),section=bad?.closest('section');if(section)show(section.id.slice(3));requestAnimationFrame(()=>f.reportValidity());return;}
@@ -457,7 +463,7 @@ const UX = {
       Store.db.profile={...p,...Object.fromEntries(['heightCm','weightKg','age'].map(k=>[k,f.elements[k].value===''?null:Number(f.elements[k].value)])),sex:f.elements.sex.value,activity:f.elements.activity.value};
       if(Store.db.strength)Store.db.strength.bmiProfile=UXCore.clone(Store.db.profile);
       const currentSettings=Store.settings();
-      Object.assign(currentSettings,{darkMode:f.elements.dark.checked,clickSounds:f.elements.clickSounds.checked,keepInTray:f.elements.tray.checked,autoPauseOnBlur:f.elements.autopause.checked,remindersEnabled:f.elements.reminders.checked,
+      Object.assign(currentSettings,{darkMode:f.elements.dark.checked,clickSounds:f.elements.clickSounds.checked,keepInTray:f.elements.tray.checked,autoPauseOnBlur:f.elements.autopause.checked,remindersEnabled:f.elements.reminders.checked,timedFocusEnabled:f.elements.timedFocusEnabled.checked,
         enabledModules:Object.keys(this.modules).filter(k=>f.elements['module-'+k].checked)});
       for(const k of ['skinLogReminderTime','sleepLogReminderTime','eveningReviewTime','quietStart','quietEnd'])currentSettings[k]=f.elements[k].value;
       currentSettings.skincareTimes=Object.fromEntries(['morning','noon','evening'].map(k=>[k,f.elements['care-'+k].value]));

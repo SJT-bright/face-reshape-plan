@@ -27,12 +27,13 @@ const Rhythm = {
   sleepDetail(s) {
     if (!RhythmEngine.hasSleep(s)) return null;
     const minutes = RhythmEngine.sleepMinutes(s);
+    if (!Number.isFinite(minutes) || minutes <= 0) return null;
     const q = s.durationOnly ? {score:s.qualityScore,source:'manual'} : RhythmEngine.sleepQuality({
       durationMinutes: minutes, deepMinutes: s.deepMinutes ?? null, lightMinutes: s.lightMinutes ?? null,
       remMinutes: s.remMinutes ?? null, morningFeeling: s.morningFeeling ?? null,
       awakeEpisodes: s.awakeEpisodes ?? null, qualityScore: s.qualityScore ?? null
     });
-    return { minutes, q, date: s.endLocal.slice(0, 10), asleepTime: s.startLocal.slice(11, 16), entry: s };
+    return { minutes, q, score: RhythmEngine.sleepDurationScore(minutes), date: s.endLocal.slice(0, 10), asleepTime: (s.startLocal || '').slice(11, 16), entry: s };
   },
   mainSleepDetails() {
     return this.data().sleeps.filter(s => RhythmEngine.hasSleep(s) && s.kind !== 'nap')
@@ -42,9 +43,9 @@ const Rhythm = {
     const details = this.mainSleepDetails();
     if (!details.length) return null;
     const last7 = details.slice(-7);
-    const avgScore = Math.round(last7.reduce((n, d) => n + (d.q?.score || 0), 0) / last7.length);
+    const avgScore = Math.round(last7.reduce((n, d) => n + d.score, 0) / last7.length);
     const avgMinutes = Math.round(last7.reduce((n, d) => n + d.minutes, 0) / last7.length);
-    const points = RhythmEngine.sleepPoints(details.map(d => ({ date: d.date, minutes: d.minutes, score: d.q?.score ?? 0, asleepTime: d.asleepTime })));
+    const points = RhythmEngine.sleepPoints(details.map(d => ({ date: d.date, minutes: d.minutes, score: d.score, asleepTime: d.asleepTime })));
     // 连续记录天数：从今天/昨天往前数
     let streak = 0;
     let cursor = todayKey();
@@ -54,30 +55,76 @@ const Rhythm = {
     return { avgScore, avgMinutes, points: points.total, streak, details, last: details[details.length - 1] };
   },
   sleepChartSVG(series) {
+    series = series.filter(s => Number.isFinite(s.minutes) && s.minutes > 0);
     if (!series.length) return '<p class="rhythm-empty">还没有可绘制的睡眠记录。先记录一晚，或导入历史记录。</p>';
-    const W = 640, H = 190, P = 30, CW = W - P * 2, CH = H - P * 2;
-    const maxMin = Math.max(600, ...series.map(s => s.minutes || 0));
-    const x = i => series.length === 1 ? W / 2 : P + i * CW / (series.length - 1);
-    const yMin = m => H - P - (m / maxMin) * CH;
-    const yScore = v => H - P - (v / 100) * CH;
-    const durPts = series.map((s, i) => `${x(i).toFixed(1)},${yMin(s.minutes || 0).toFixed(1)}`);
-    const scoreIdx = series.map((s, i) => s.score != null ? i : -1).filter(i => i >= 0);
-    const scorePts = scoreIdx.map(i => `${x(i).toFixed(1)},${yScore(series[i].score).toFixed(1)}`);
-    const target = yMin(420);
-    const area = `${P},${H - P} ${durPts.join(' ')} ${x(series.length - 1).toFixed(1)},${H - P}`;
-    const labels = series.map((s, i) =>
-      (series.length <= 7 || i % Math.ceil(series.length / 6) === 0 || i === series.length - 1)
-        ? `<text x="${x(i).toFixed(1)}" y="${H - 8}" text-anchor="middle" class="sleep-chart-label">${s.date.slice(5)}</text>` : '').join('');
-    const dots = series.map((s, i) => `<circle cx="${x(i).toFixed(1)}" cy="${yMin(s.minutes || 0).toFixed(1)}" r="2.6" fill="#5b8def"/>`).join('');
-    const scoreDots = scoreIdx.map(i => `<circle cx="${x(i).toFixed(1)}" cy="${yScore(series[i].score).toFixed(1)}" r="2.6" fill="#e5975a"/>`).join('');
-    return `<svg viewBox="0 0 ${W} ${H}" class="sleep-chart" role="img" aria-label="近 14 天睡眠时长与评分折线图">
-      <line x1="${P}" y1="${target}" x2="${W - P}" y2="${target}" stroke="#9db6cc" stroke-width="1" stroke-dasharray="4 4"/>
-      <text x="${P}" y="${target - 5}" class="sleep-chart-label">目标 7h</text>
-      <polygon points="${area}" fill="rgba(91,141,239,.10)"/>
-      <polyline points="${durPts.join(' ')}" fill="none" stroke="#5b8def" stroke-width="2"/>
-      ${scorePts.length > 1 ? `<polyline points="${scorePts.join(' ')}" fill="none" stroke="#e5975a" stroke-width="1.6" stroke-dasharray="3 3"/>` : ''}
-      ${dots}${scoreDots}${labels}
-    </svg>`;
+    const W = Math.max(760, series.length * 70 + 112), H = 512, L = 68, R = W - 46;
+    const top = 42, bottom = 278, scoreTop = 344, scoreBottom = 464;
+    const targetMinutes = RhythmEngine.SLEEP_TARGET_MINUTES;
+    // 聚焦已记录的小时范围，每格始终 1 小时；不以截断的基线填充面积。
+    const minHour = Math.max(0, Math.floor(Math.min(targetMinutes, ...series.map(s => s.minutes)) / 60) - 1);
+    const maxHour = Math.max(minHour + 4, Math.ceil(Math.max(targetMinutes, ...series.map(s => s.minutes)) / 60) + 1);
+    const x = i => series.length === 1 ? (L + R) / 2 : L + i * (R - L) / (series.length - 1);
+    const yMin = m => bottom - (m / 60 - minHour) / (maxHour - minHour) * (bottom - top);
+    const yScore = v => scoreBottom - v / 100 * (scoreBottom - scoreTop);
+    const scores = series.map(s => RhythmEngine.sleepDurationScore(s.minutes));
+    const durPts = series.map((s, i) => `${x(i).toFixed(2)},${yMin(s.minutes).toFixed(2)}`);
+    const scorePts = scores.map((v, i) => `${x(i).toFixed(2)},${yScore(v).toFixed(2)}`);
+    let grid = '';
+    for (let hour = minHour; hour <= maxHour; hour++) {
+      const y = yMin(hour * 60), target = hour * 60 === targetMinutes;
+      grid += `<line data-hour="${hour}" x1="${L}" y1="${y}" x2="${R}" y2="${y}" class="${target ? 'sleep-target-line' : 'sleep-grid-line'}"/>
+        <text x="${L - 12}" y="${y + 4}" text-anchor="end" class="sleep-chart-label${target ? ' sleep-target-label' : ''}">${hour} 小时</text>`;
+    }
+    const scoreGrid = [0, 25, 50, 75, 100].map(v => `<line x1="${L}" y1="${yScore(v)}" x2="${R}" y2="${yScore(v)}" class="sleep-grid-line"/><text x="${L - 12}" y="${yScore(v) + 4}" text-anchor="end" class="sleep-chart-label">${v}</text>`).join('');
+    const points = series.map((s, i) => {
+      const minute = Math.round(s.minutes);
+      const short = `${Math.floor(minute / 60)}h${String(minute % 60).padStart(2, '0')}`;
+      const reading = this.sleepChartReading(series, i);
+      return `<g class="sleep-chart-point${i === series.length - 1 ? ' is-active' : ''}" data-sleep-point="${i}" data-reading="${esc(reading)}" tabindex="0" role="button" aria-label="${esc(reading)}" aria-pressed="${i === series.length - 1}">
+        <title>${esc(reading)}</title><line x1="${x(i)}" y1="${top}" x2="${x(i)}" y2="${scoreBottom}" class="sleep-point-guide"/>
+        <circle cx="${x(i)}" cy="${yMin(s.minutes)}" r="5" class="sleep-duration-dot"/>
+        <text x="${x(i)}" y="${yMin(s.minutes) - 13}" text-anchor="middle" class="sleep-chart-value sleep-duration-value">${short}</text>
+        <circle cx="${x(i)}" cy="${yScore(scores[i])}" r="4.5" class="sleep-score-dot"/>
+        <text x="${x(i)}" y="${yScore(scores[i]) - 12}" text-anchor="middle" class="sleep-chart-value sleep-score-value">${scores[i]} 分</text>
+        <text x="${x(i)}" y="${H - 20}" text-anchor="middle" class="sleep-chart-label">${esc(s.date.slice(5))}</text>
+      </g>`;
+    }).join('');
+    return `<div class="sleep-chart-scroll" tabindex="0" aria-label="最近 ${series.length} 次睡眠趋势，窄窗口可横向滚动"><svg viewBox="0 0 ${W} ${H}" style="min-width:${Math.max(620, series.length * 48 + 108)}px" class="sleep-chart" role="group" aria-label="睡眠时长每格 1 小时，时长评分为 0 至 100 分">
+      <text x="${L}" y="18" class="sleep-chart-heading">睡眠时长 · 每格 1 小时</text>${grid}
+      <text x="${R}" y="${yMin(targetMinutes) - 8}" text-anchor="end" class="sleep-target-label">7 小时目标</text>
+      <polyline class="sleep-duration-line" points="${durPts.join(' ')}"/>
+      <text x="${L}" y="320" class="sleep-chart-heading">时长评分 · 达到 7 小时为 100 分</text>${scoreGrid}
+      <polyline class="sleep-score-line" points="${scorePts.join(' ')}"/>${points}
+    </svg></div><p class="sleep-chart-reading" id="rh-sleep-reading" aria-live="polite">${esc(this.sleepChartReading(series, series.length - 1))}</p>
+      <p class="rhythm-caption sleep-chart-scale">最近 ${series.length} 次主要睡眠，按记录等距排列；小时纵轴显示 ${minHour}–${maxHour} 小时。点击、悬停或用方向键查看具体数值。</p>`;
+  },
+  sleepChartReading(series, i) {
+    const s = series[i], score = RhythmEngine.sleepDurationScore(s.minutes);
+    const gap = RhythmEngine.SLEEP_TARGET_MINUTES - s.minutes;
+    let text = `${s.date} · ${this.sleepDurationText(s.minutes)} · 时长评分 ${score} 分 · ${gap > 0 ? '距 7 小时还差 ' + this.sleepDurationText(gap) : '已达到 7 小时目标'}`;
+    if (i > 0) {
+      const prev = series[i - 1], delta = s.minutes - prev.minutes;
+      const scoreDelta = score - RhythmEngine.sleepDurationScore(prev.minutes);
+      text += `；比 ${prev.date} ${delta === 0 ? '时长相同' : (delta > 0 ? '多 ' : '少 ') + this.sleepDurationText(Math.abs(delta))}`;
+      if (scoreDelta) text += `，评分${scoreDelta > 0 ? '高' : '低'} ${Math.abs(scoreDelta)} 分`;
+    }
+    if (Number.isInteger(s.entry?.qualityScore)) text += `；原记录自评分 ${s.entry.qualityScore} 分`;
+    return text;
+  },
+  bindSleepChart(root) {
+    const points = $$('[data-sleep-point]', root), reading = $('#rh-sleep-reading', root);
+    const select = point => {
+      points.forEach(p => { const active = p === point; p.classList.toggle('is-active', active); p.setAttribute('aria-pressed', String(active)); });
+      if (reading) reading.textContent = point.dataset.reading;
+    };
+    points.forEach((point, i) => {
+      point.onmouseenter = point.onclick = point.onfocus = () => select(point);
+      point.onkeydown = e => {
+        const next = e.key === 'ArrowLeft' ? Math.max(0, i - 1) : e.key === 'ArrowRight' ? Math.min(points.length - 1, i + 1) : e.key === 'Home' ? 0 : e.key === 'End' ? points.length - 1 : null;
+        if (next != null) { e.preventDefault(); points[next].focus(); }
+        else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(point); }
+      };
+    });
   },
   async importLifepivot() {
     if (this.importBusy) return;
@@ -125,6 +172,11 @@ const Rhythm = {
   duration(n) {
     if (n == null) return '—';
     const minutes = Math.round(n / 5) * 5;
+    return minutes >= 60 ? `${Math.floor(minutes / 60)} 小时${minutes % 60 ? ` ${minutes % 60} 分` : ''}` : `${minutes} 分钟`;
+  },
+  sleepDurationText(n) {
+    if (!Number.isFinite(n)) return '—';
+    const minutes = Math.round(n);
     return minutes >= 60 ? `${Math.floor(minutes / 60)} 小时${minutes % 60 ? ` ${minutes % 60} 分` : ''}` : `${minutes} 分钟`;
   },
   async commit(change, success = '已保存') {
@@ -238,22 +290,23 @@ const Rhythm = {
             ${sleeps.filter(s => RhythmEngine.hasSleep(s)).length ? `<details class="rhythm-sleep-history"><summary>查看这一天的睡眠记录（${sleeps.filter(s => RhythmEngine.hasSleep(s)).length}）</summary>${sleeps.filter(s => RhythmEngine.hasSleep(s)).map(s => { const qd = this.sleepDetail(s); return `<div class="rhythm-record"><div><strong>${s.durationOnly?'已记录总时长':esc(s.startLocal.slice(11))+' → '+esc(s.endLocal.slice(11))}</strong><span>${s.kind === 'nap' ? '午睡 / 小睡' : '主要睡眠'} · ${this.duration(RhythmEngine.sleepMinutes(s))}${qd && qd.q ? ` · ${qd.q.score} 分` : ''}${s.source === 'lifepivot' ? ' · 来自个人积累库' : ''}</span></div><button class="btn small ghost" data-sleep="${esc(s.id)}">编辑</button></div>`; }).join('')}</details>` : ''}
             ${unfinished.length ? `<details class="rhythm-sleep-history"><summary>旧版未完成记录（${unfinished.length}）</summary><p class="rhythm-caption">这些旧记录已保留，不参与统计；可填写完整时间或删除。</p>${unfinished.map(s => `<div class="rhythm-record"><span>${esc(s.startLocal.replace('T', ' '))}</span><button class="btn small ghost" data-sleep="${esc(s.id)}">整理记录</button></div>`).join('')}</details>` : ''}
           </div>
-        </div><p class="rhythm-caption rhythm-footnote">补记或修改后，请重新确认“已记全”。未记全的日子不用于判断进餐间隔或睡眠偏短。总时长和分数按你保存的数值统计；旧记录保留原来的时间与分期数据。</p>
+        </div><p class="rhythm-caption rhythm-footnote">补记或修改后，请重新确认“已记全”。未记全的日子不用于判断进餐间隔或睡眠偏短。原始时长与自评分按保存值保留；下方时长评分按 7 小时目标计算。旧记录保留原来的时间与分期数据。</p>
       </section>
       ${this.nutritionCardHtml()}
       <section class="rhythm-card sleep-quality-card" aria-labelledby="rh-sq-title">
-        <div class="rhythm-heading"><div><h2 id="rh-sq-title">睡眠质量体系<span class="sleep-badge-src">来自个人积累库</span></h2><p class="rhythm-caption">新记录直接使用你保存的分数，旧记录沿用原评分规则；积分随记录累计。</p></div><button class="btn small ghost" id="rh-import-sleep">从个人积累库导入</button></div>
+        <div class="rhythm-heading"><div><h2 id="rh-sq-title">睡眠时长与评分<span class="sleep-badge-src">目标 7 小时</span></h2><p class="rhythm-caption">时长评分 = 实际睡眠分钟 ÷ 420 × 100，四舍五入，最高 100 分。5 小时 71 分，6 小时 86 分，7 小时 100 分；原记录自评分保留。</p></div><button class="btn small ghost" id="rh-import-sleep">从个人积累库导入</button></div>
         ${(() => {
           const s = this.sleepQualitySummary();
           if (!s) return '<p class="rhythm-empty">还没有睡眠记录。手动记一条，或点右上角从个人积累库导入历史记录。</p>';
           const last14 = s.details.slice(-14);
           return `<div class="sleep-quality-metrics">
-            <div><span>最近 7 次平均分</span><strong>${s.avgScore}<small>分</small></strong><small>最近一晚 ${s.last.q ? s.last.q.score + ' 分' : '—'}</small></div>
-            <div><span>睡眠积分</span><strong>${s.points}<small>分</small></strong><small>记录/达标/早睡都会加分</small></div>
-            <div><span>连续记录</span><strong>${s.streak}<small>天</small></strong><small>最近 7 次平均时长 ${this.duration(s.avgMinutes)}</small></div>
+            <div><span>最近 7 次平均时长评分</span><strong>${s.avgScore}<small>分</small></strong><small>最近一条 ${s.last.score} 分</small></div>
+            <div><span>睡眠积分</span><strong>${s.points}<small>分</small></strong><small>按记录、时长达标、时长评分和早睡累计</small></div>
+            <div><span>连续记录</span><strong>${s.streak}<small>天</small></strong><small>最近 7 次平均时长 ${this.sleepDurationText(s.avgMinutes)}</small></div>
           </div>
+          <div class="sleep-latest" data-sleep-latest><div><span>${esc(s.last.date)} · 最近一次睡眠</span><strong>${this.sleepDurationText(s.last.minutes)}<small>${s.last.score} 分</small></strong></div><p>${esc(this.sleepChartReading(s.details.slice(-2), Math.min(1, s.details.length - 1)))}</p></div>
           ${this.sleepChartSVG(last14)}
-          <div class="sleep-chart-legend"><span><i class="dot dur"></i>睡眠时长</span><span><i class="dot score"></i>质量评分（虚线）</span><span class="sleep-chart-note">虚线横线为 7 小时目标 · 数据全部保存在本机</span></div>`;
+          <div class="sleep-chart-legend"><span><i class="dot dur"></i>睡眠时长（蓝色实线）</span><span><i class="dot score"></i>时长评分（橙色虚线）</span><span class="sleep-chart-note">上图横向虚线为 7 小时目标 · 数据保存在本机</span></div>`;
         })()}
       </section>
       <section class="rhythm-card" aria-labelledby="rh-trend-title">
@@ -308,6 +361,7 @@ const Rhythm = {
     });
     $$('[data-meal]', root).forEach(b => { b.onclick = () => this.mealModal(b.dataset.meal); });
     $$('[data-meal-photo]',root).forEach(b=>{b.onclick=()=>this.mealPhotoViewer(b.dataset.mealPhoto);});
+    this.bindSleepChart(root);
     $('#rh-diet-entry',root).onclick=()=>{$('#rh-diet-journal',root).scrollIntoView({behavior:'smooth',block:'start'});};
     if(typeof Skincare!=='undefined')void Skincare._loadPhotoImgs(root);
     $$('[data-sleep]', root).forEach(b => { b.onclick = () => { const entry = d.sleeps.find(s => s.id === b.dataset.sleep); this.selectedDay = (entry.endLocal || entry.startLocal).slice(0, 10); this.sleepEditId = entry.id; this.refresh(); $('#rh-sleep-form [name=hours]').focus(); }; });

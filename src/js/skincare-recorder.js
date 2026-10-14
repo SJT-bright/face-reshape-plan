@@ -8,9 +8,10 @@
     'video/webm'
   ];
 
-  function pickMime(isTypeSupported) {
+  function pickMime(isTypeSupported, audio = false) {
     const ok = typeof isTypeSupported === 'function' ? isTypeSupported : () => false;
-    for (const mime of WEBM_TYPES) {
+    const types = audio ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'] : WEBM_TYPES;
+    for (const mime of types) {
       if (ok(mime)) return mime;
     }
     /* mp4 只在 webm 全不可用时兜底；否则交给浏览器默认。 */
@@ -40,7 +41,7 @@
     const mime = pickMime((type) => {
       const Ctor = resolveCtor();
       return typeof Ctor === 'function' && typeof Ctor.isTypeSupported === 'function' && !!Ctor.isTypeSupported(type);
-    });
+    }, typeof stream?.getAudioTracks === 'function' && stream.getAudioTracks().length > 0);
 
     let recorder = null;
     let recording = false;

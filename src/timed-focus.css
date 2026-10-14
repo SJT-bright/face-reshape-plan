@@ -1,0 +1,16 @@
+.timed-focus-running #main { padding-bottom:115px; }
+#timed-focus-bar { position:fixed; bottom:18px; left:max(18px,calc((100vw - 1080px)/2)); right:18px; z-index:120; display:flex; align-items:center; gap:18px; padding:20px 24px; border:1px solid rgba(105,133,174,.35); border-radius:22px; background:rgba(238,244,255,.97); box-shadow:0 16px 60px rgba(27,47,79,.23); }
+#timed-focus-bar > div { margin-right:auto; }
+#timed-focus-bar b { display:block; font-size:20px; color:#253c63; }
+#timed-focus-bar small { display:block; margin-top:6px; color:#5f7494; }
+#timed-focus-clock { font-size:34px; font-variant-numeric:tabular-nums; color:#33425a; }
+#timed-focus-pending { position:fixed; right:24px; top:20px; z-index:130; max-width:400px; padding:18px; background:#edf3ff; color:#33425a; border-radius:16px; box-shadow:0 10px 40px #24304d33; }
+.sk-record-phase { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:14px 0; font-size:13px; }
+.sk-record-phase select { padding:8px 12px; border:1px solid #cbd4e7; border-radius:10px; background:rgba(255,255,255,.65); color:#33425a; }
+.review-source-card { margin:16px 0; padding:18px; border:1px solid #cbd8ee; border-radius:14px; background:rgba(245,248,255,.7); overflow-wrap:anywhere; }
+.review-source-card h4 { margin:0 0 8px; }
+.review-source-card pre { white-space:pre-wrap; font:inherit; line-height:1.8; color:#33425a; }
+.review-video-status { margin:8px 0; font-size:12px; line-height:1.7; color:#5f7494; }
+.review-video-error { color:#a54842; }
+#evening-video-menu { position:fixed; z-index:220; padding:6px; border:1px solid #cbd4e7; border-radius:12px; background:#f8faff; box-shadow:0 12px 40px #253c6333; }
+@media(max-width:900px){#timed-focus-bar {left:16px; flex-wrap:wrap; gap:12px; padding:16px;} #timed-focus-bar b{font-size:17px;} #timed-focus-clock{font-size:28px;} }

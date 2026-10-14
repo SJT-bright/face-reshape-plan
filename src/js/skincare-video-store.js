@@ -221,4 +221,4 @@ function listFiles(dir) {
   }
 }
 
-module.exports = { MAX_BYTES, videoFileName, createFile, appendChunk, finishFile, listFiles };
+module.exports = { MAX_BYTES, videoFileName, createFile, appendChunk, finishFile, listFiles, resolveVideo };

@@ -212,6 +212,12 @@
     const score = manual != null ? Math.round(manual * 0.6 + computed * 0.4) : computed;
     return { score, computed, manual, deepPct, remPct };
   }
+  // 7 小时目标的时长达标度；与手填质量分和分期综合分分别保存/展示。
+  const SLEEP_TARGET_MINUTES = 420;
+  function sleepDurationScore(minutes) {
+    if (!Number.isFinite(minutes) || minutes < 0) return null;
+    return Math.min(100, Math.round(minutes / SLEEP_TARGET_MINUTES * 100));
+  }
   function daysBetweenKeys(a, b) {
     return Math.round((Date.parse(b + 'T12:00') - Date.parse(a + 'T12:00')) / 86400000);
   }
@@ -529,6 +535,6 @@
       disclaimer: '血糖友好「习惯」参考分：按你的记录评估习惯，不是血糖测量；血糖波动与注意力/困倦的关联为观察性证据，不预测任何认知表现。'
     };
   }
-  const api = { normalize, localNow, addDay, parse, circularSD, validateMeal, validateSleep, sleepInput, sleepMinutes, hasSleep, analyze, completeBetween, sleepQuality, sleepPoints, daysBetweenKeys, sleepAdvice, circularMeanMinutes, circularMedoidMinutes, circularShift, circularDiffMinutes, circularMidpoint, clockText, nutritionAdvice, summarizeMealsToday, SUGAR_TIERS, setSugarTier, glycemicScore, MEAL_TYPE_WINDOWS, classifyMealType, mealTypeLabel, mealTypeKind, resolveMealSelection };
+  const api = { normalize, localNow, addDay, parse, circularSD, validateMeal, validateSleep, sleepInput, sleepMinutes, hasSleep, analyze, completeBetween, sleepQuality, sleepDurationScore, SLEEP_TARGET_MINUTES, sleepPoints, daysBetweenKeys, sleepAdvice, circularMeanMinutes, circularMedoidMinutes, circularShift, circularDiffMinutes, circularMidpoint, clockText, nutritionAdvice, summarizeMealsToday, SUGAR_TIERS, setSugarTier, glycemicScore, MEAL_TYPE_WINDOWS, classifyMealType, mealTypeLabel, mealTypeKind, resolveMealSelection };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.RhythmEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

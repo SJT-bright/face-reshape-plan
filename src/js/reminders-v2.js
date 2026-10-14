@@ -16,11 +16,11 @@ function timeline(db,now=new Date()){
  }
  if(mods.includes('skincare')){
   const cyc=db.skincare?.cycles?.find(x=>x.startDate&&x.startDate<=date&&(!x.endDate||x.endDate>=date));
-  for(const [phase,time,label]of [['morning',s.skincareTimes?.morning,'晨间护理'],['day',s.skincareTimes?.noon,'日间护理'],['evening',s.skincareTimes?.evening,'晚间护理']]){const steps=cyc?.steps?.[phase]||[];if(steps.length)add('care-'+phase,time,label,'skincare','care',steps.every(x=>(db.logs?.skincare?.[date]?.[phase]||[]).includes(x.id)),null,{autoStart:!!s.automation?.careAutoOpen,period:phase});}
+  for(const [phase,time,label]of [['morning',s.skincareTimes?.morning,'晨间护理'],['day',s.skincareTimes?.noon,'日间护理'],['evening',s.skincareTimes?.evening,'晚间护理']]){const steps=cyc?.steps?.[phase]||[];const focus=s.timedFocusEnabled===true;if(steps.length||focus)add('care-'+phase,time,label,'skincare','care',focus?!!db.focusSessions?.[date+'|care-'+phase]?.completed:steps.every(x=>(db.logs?.skincare?.[date]?.[phase]||[]).includes(x.id)),null,{autoStart:focus||!!s.automation?.careAutoOpen,period:phase,focus});}
   add('skin',s.skinLogReminderTime,'记录皮肤','skincare','skin',!!db.skin?.logs?.[date]);
  }
  if(mods.includes('nutrition'))add('sleep',s.sleepLogReminderTime,'记录昨晚睡眠','nutrition','sleep',(db.rhythm?.sleeps||[]).some(x=>(x.end||x.durationOnly&&Number.isInteger(x.recordedMinutes)&&x.recordedMinutes>0)&&x.kind!=='nap'&&x.endLocal?.slice(0,10)===date));
- if(mods.length)add('review',s.eveningReviewTime,'晚间复盘','today','review',!!db.rhythm?.completeDays?.[date]?.meals&&!!db.rhythm?.completeDays?.[date]?.sleep);
+ if(mods.length)add('review',s.eveningReviewTime,'晚间复盘',s.timedFocusEnabled===true?'daily-review':'today','review',s.timedFocusEnabled===true?!!db.focusSessions?.[date+'|review']?.completed:!!db.rhythm?.completeDays?.[date]?.meals&&!!db.rhythm?.completeDays?.[date]?.sleep,null,{autoStart:s.timedFocusEnabled===true,focus:s.timedFocusEnabled===true});
  return rows.sort((a,b)=>a.time.localeCompare(b.time));
 }
 function due(db,now=new Date()){
