@@ -1,0 +1,102 @@
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const Core = require('../src/js/habit-reminder-core');
+const at = +new Date(2026, 9, 14, 12, 0), minute = Core.MINUTE;
+const water = { id: 'water', name: '喝水提醒', actionLabel: '我去喝水', intervalMinutes: 10, enabled: true };
+const enabled = (config = water, time = at) => Core.configure(undefined, config, time).state;
+const due = (state, time = at + 10 * minute) => Core.advance(state, time).state;
+
+test('预设可见但不自动启用；名称、按钮与整数间隔校验', () => {
+  const original = Core.defaults();
+  assert.deepEqual(original.configs.map(c => [c.name, c.intervalMinutes, c.enabled]), [['喝水提醒', 10, false], ['运动提醒', 60, false]]);
+  assert.equal(Core.advance(original, at + 1000 * minute).changed, false);
+  assert.equal(Core.validateConfig({ ...water, name: '站起来提醒', actionLabel: '' }).actionLabel, '我去站起来');
+  for (const intervalMinutes of [0, 1.2, 1441, NaN]) assert.throws(() => Core.configure(original, { ...water, intervalMinutes }, at), /整数分钟/);
+  assert.throws(() => Core.configure(original, { ...water, name: '' }, at), /名称/);
+  assert.throws(() => Core.configure(original, { ...water, id: '../bad' }, at), /标识/);
+  assert.throws(() => Core.configure(original, { ...water, id: '__proto__' }, at), /标识/);
+  assert.equal(Core.configure(original, { ...water, intervalMinutes: 1 }, at).state.runtime.water.nextDueAt, at + minute);
+});
+test('到期精确入队，晚醒只补一条，等待处理时不堆积每个间隔', () => {
+  const state = enabled(), original = JSON.stringify(state);
+  assert.equal(Core.advance(state, at + 10 * minute - 1).changed, false);
+  const result = Core.advance(state, at + 8 * 60 * minute);
+  assert.equal(result.state.queue.length, 1);
+  assert.equal(Core.active(result.state, at).name, '喝水提醒');
+  assert.equal(Core.advance(result.state, at + 12 * 60 * minute).state.queue.length, 1);
+  assert.equal(JSON.stringify(state), original, 'core does not mutate caller data');
+});
+test('稍等固定 5 分钟，不计数，重启保留同一条提醒；完成才记一次', () => {
+  let state = due(enabled()), id = state.activeId;
+  const deferred = Core.act(state, id, 'later', at + 10 * minute);
+  assert.equal(deferred.todayCount, 0); assert.equal(deferred.nextDueAt, at + 15 * minute);
+  state = JSON.parse(JSON.stringify(deferred.state));
+  assert.equal(Core.advance(state, at + 15 * minute - 1).state.activeId, null);
+  state = due(state, at + 15 * minute);
+  assert.equal(state.activeId, id);
+  const result = Core.act(state, id, 'complete', at + 16 * minute);
+  assert.equal(result.todayCount, 1); assert.equal(result.nextDueAt, at + 26 * minute);
+  const duplicate = Core.act(result.state, id, 'complete', at + 17 * minute);
+  assert.equal(duplicate.ok, false); assert.equal(duplicate.changed, false);
+  assert.equal(Core.snapshot(duplicate.state, at).todayTotal, 1);
+  state = due(result.state, at + 26 * minute);
+  assert.notEqual(state.activeId, id);
+  assert.equal(Core.act(state, id, 'complete', at + 26 * minute).ok, false);
+});
+test('多个提醒同到点按队列显示，非当前提醒不能偷记完成', () => {
+  let state = enabled();
+  state = Core.configure(state, { id: 'movement', name: '起身活动', actionLabel: '我去活动', intervalMinutes: 10, enabled: true }, at).state;
+  state = due(state);
+  assert.equal(state.queue.length, 2); assert.equal(Core.active(state, at).queuedCount, 1);
+  const [first, second] = state.queue;
+  assert.equal(Core.act(state, second.id, 'complete', at).ok, false);
+  state = Core.act(state, first.id, 'later', at + 10 * minute).state;
+  assert.equal(state.activeId, second.id); assert.equal(Core.snapshot(state, at).todayTotal, 0);
+  state = Core.act(state, second.id, 'complete', at + 11 * minute).state;
+  assert.equal(state.activeId, null); assert.equal(Core.snapshot(state, at).todayTotal, 1);
+});
+test('以确认完成时的本地日期计数，旧天记录不会在午夜清空', () => {
+  const before = +new Date(2026, 9, 14, 23, 50), after = +new Date(2026, 9, 15, 0, 1);
+  let state = due(enabled(water, before), before + 10 * minute);
+  state = Core.act(state, state.activeId, 'complete', after).state;
+  assert.equal(Core.snapshot(state, before).todayTotal, 0);
+  assert.equal(Core.snapshot(state, after).todayTotal, 1);
+  const saved = JSON.parse(JSON.stringify(state));
+  assert.equal(Core.normalize(saved).completions[Object.keys(saved.completions)[0]].date, '2026-10-15');
+});
+test('改名称保留倒计时，改间隔重排；停用/删除保留完成账本并使旧弹窗失效', () => {
+  let state = enabled(), dueAt = state.runtime.water.nextDueAt;
+  state = Core.configure(state, { ...water, name: '补充水分', actionLabel: '去喝水' }, at + minute).state;
+  assert.equal(state.runtime.water.nextDueAt, dueAt);
+  state = Core.configure(state, { ...water, intervalMinutes: 30 }, at + 2 * minute).state;
+  assert.equal(state.runtime.water.nextDueAt, at + 32 * minute);
+  state = due(state, at + 32 * minute); const id = state.activeId;
+  state = Core.act(state, id, 'complete', at + 32 * minute).state;
+  state = Core.configure(state, { ...water, enabled: false }, at + 33 * minute).state;
+  assert.equal(state.runtime.water.nextDueAt, null);
+  assert.equal(Core.advance(state, at + 100 * minute).state.activeId, null);
+  state = Core.remove(state, 'water').state;
+  assert.equal(Core.snapshot(state, at).todayTotal, 1);
+  state = Core.configure(state, water, at + 100 * minute).state;
+  state = due(state, at + 110 * minute);
+  assert.notEqual(state.activeId, id);
+  assert.equal(Core.act(state, id, 'complete', at + 110 * minute).ok, false);
+});
+test('旧 renderer 保存不能倒退队列或丢计数；并发配置需要匹配 revision', () => {
+  const old = enabled(); let state = due(old);
+  state = Core.act(state, state.activeId, 'complete', at + 10 * minute).state;
+  const merged = Core.mergeState(state, old);
+  assert.equal(Core.snapshot(merged, at).todayTotal, 1);
+  assert.equal(merged.runtime.water.nextDueAt, at + 20 * minute);
+  assert.deepEqual(Core.mergeState(merged, undefined), merged);
+  assert.throws(() => Core.configure(merged, water, at, old.revision), /其他窗口更新/);
+  assert.equal(Core.configure(merged, water, at, merged.revision).changed, false);
+});
+test('勿扰/总开关暂停期间不入队，解除后只弹一条；脏配置不阻止有效提醒', () => {
+  const state = enabled();
+  assert.equal(Core.advance(state, at + 11 * minute, true).state.activeId, null);
+  assert.equal(Core.advance(state, at + 200 * minute, false).state.queue.length, 1);
+  state.configs.push({ id: 'bad', name: '坏数据', intervalMinutes: 0, enabled: true });
+  assert.equal(Core.advance(state, at + 10 * minute).state.queue.length, 1);
+});
